@@ -69,7 +69,7 @@ export default function App() {
                   </motion.div>
                 </AnimatePresence>
               </main>
-              {page !== 'terminal' && page !== 'settings' && <RightPanel />}
+              {page !== 'terminal' && page !== 'settings' && page !== 'projects' && <RightPanel />}
             </div>
             {page !== 'terminal' && <TerminalPanel />}
           </div>

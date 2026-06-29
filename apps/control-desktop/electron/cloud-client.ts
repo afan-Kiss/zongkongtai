@@ -103,6 +103,27 @@ export class CloudClient {
     return this.request<any[]>('/api/dashboard/operations');
   }
 
+  async importManifests(manifests: unknown[]) {
+    return this.request<{
+      ok: boolean;
+      imported: number;
+      updated: number;
+      skipped: number;
+      warnings: string[];
+      codes: string[];
+    }>('/api/projects/import-manifests', {
+      method: 'POST',
+      body: JSON.stringify({ manifests }),
+    });
+  }
+
+  async requestRescan(agentId?: string) {
+    return this.request<{ ok: boolean; message: string }>('/api/ports/rescan', {
+      method: 'POST',
+      body: JSON.stringify(agentId ? { agentId } : {}),
+    });
+  }
+
   async ensureLogin(): Promise<void> {
     try {
       await this.me();

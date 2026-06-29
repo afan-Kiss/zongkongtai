@@ -145,6 +145,16 @@ const api = {
     },
   },
 
+  manifest: {
+    scanLocal: () => ipcRenderer.invoke('manifest:scanLocal'),
+    import: () => ipcRenderer.invoke('manifest:import'),
+  },
+
+  projects: {
+    refresh: () => ipcRenderer.invoke('projects:refresh'),
+    rescanDisk: () => ipcRenderer.invoke('projects:rescanDisk'),
+  },
+
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
 

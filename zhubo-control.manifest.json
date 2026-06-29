@@ -1,0 +1,45 @@
+{
+  "manifestVersion": 1,
+  "name": "珠宝项目总控台",
+  "code": "zhubo-control",
+  "category": "总控",
+  "locationType": "mixed",
+  "gitRemote": "https://github.com/afan-Kiss/zongkongtai.git",
+  "localPath": "E:\\我的软件源码\\总控台",
+  "desktopStartCommand": "npm run dev:desktop",
+  "desktopStopMode": "process-tree",
+  "localWebUrl": "http://127.0.0.1:4791",
+  "localHealthUrl": "http://127.0.0.1:4790/api/health",
+  "publicUrl": "http://8.137.126.18/control/",
+  "healthType": "http",
+  "ports": [
+    4790,
+    4791
+  ],
+  "services": [
+    {
+      "name": "server",
+      "command": "npm run dev:server",
+      "port": 4790,
+      "healthUrl": "http://127.0.0.1:4790/api/health"
+    },
+    {
+      "name": "web",
+      "command": "npm run dev:web",
+      "port": 4791,
+      "webUrl": "http://127.0.0.1:4791"
+    },
+    {
+      "name": "agent",
+      "command": "npm run dev:agent",
+      "type": "worker"
+    }
+  ],
+  "control": {
+    "enabled": true,
+    "showInDesktop": true,
+    "cookieMode": "control",
+    "favorite": true,
+    "notes": "本地 EXE + 云端 Cookie 中心"
+  }
+}

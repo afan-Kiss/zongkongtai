@@ -5,6 +5,8 @@ import { writeOperationLog } from '../services/operationLog';
 import { agentHub } from '../services/agentHub';
 import { paramId } from '../lib/params';
 import { parseProjectCreate, parseProjectUpdate, formatZodError } from '../lib/validateInput';
+import { readManifestJson } from '@zhubo/control-shared';
+import { importManifests } from '../services/manifestImport';
 
 const router = Router();
 
@@ -186,6 +188,21 @@ router.post('/:id/health-check', requireAuth, async (req, res) => {
     await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } });
     res.json(result);
   }
+});
+
+router.post('/import-manifests', requireAuth, async (req, res) => {
+  const raw = req.body?.manifests;
+  if (!Array.isArray(raw)) {
+    return res.status(400).json({ error: 'manifests 必须是数组' });
+  }
+  const manifests = raw.map((item) => readManifestJson(item)).filter(Boolean) as NonNullable<
+    ReturnType<typeof readManifestJson>
+  >[];
+  if (!manifests.length) {
+    return res.status(400).json({ error: '没有有效的 manifest 条目' });
+  }
+  const result = await importManifests(manifests, getActor(req), getClientIp(req));
+  res.json({ ok: true, ...result });
 });
 
 export default router;

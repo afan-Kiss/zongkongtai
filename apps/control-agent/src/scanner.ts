@@ -15,6 +15,7 @@ import {
   CommandType,
 } from '@zhubo/control-shared';
 import { PRIORITY_PORTS } from '@zhubo/control-shared';
+import { applyManifestToScan } from './manifest-reader';
 
 const CATEGORY_MAP: Record<string, string> = {
   主播分析: '主播分析',
@@ -227,21 +228,25 @@ function scanProjectDir(projectDir: string, rootName: string): ScanProjectResult
     readmeNote ? `README: ${readmeNote}` : '',
   ].filter(Boolean);
 
-  return {
-    name,
-    code,
-    localPath: projectDir,
-    category: guessCategory(name),
-    packageManager: detectPackageManager(projectDir),
-    startCommand: pkg?.command,
-    devCommand: dev?.command,
-    buildCommand: build?.command,
-    pm2Name,
-    healthUrl,
-    ports,
-    commands,
-    notes: notesParts.join(' | ') || undefined,
-  };
+  return applyManifestToScan(
+    {
+      name,
+      code,
+      localPath: projectDir,
+      category: guessCategory(name),
+      packageManager: detectPackageManager(projectDir),
+      startCommand: pkg?.command,
+      devCommand: dev?.command,
+      buildCommand: build?.command,
+      pm2Name,
+      healthUrl,
+      ports,
+      commands,
+      notes: notesParts.join(' | ') || undefined,
+      gitRemote: gitRemote || undefined,
+    },
+    projectDir,
+  );
 }
 
 export function getRuntimePorts(): Array<{ port: number; pid?: number; processName?: string }> {

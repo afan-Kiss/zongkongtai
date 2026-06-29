@@ -39,6 +39,13 @@ import { fileLog } from './file-logger';
 
 import { agentManager } from './agent-manager';
 import {
+  scanManifestsUnderRoot,
+  getScanRoot,
+  enrichProjectsWithManifests,
+  runAgentScanCli,
+} from './manifest-scanner';
+import { resolveMonorepoRoot } from './agent-manager';
+import {
   assertAllowedExternalUrl,
   assertAllowedOpenPath,
   assertMoveWindowOptions,
@@ -453,6 +460,53 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     const file = agentManager.openAgentLog();
     shell.showItemInFolder(file);
     return file;
+  });
+
+  ipcMain.handle('manifest:scanLocal', () => {
+    const root = getScanRoot();
+    return { root, manifests: scanManifestsUnderRoot(root) };
+  });
+
+  ipcMain.handle('manifest:import', async () => {
+    await cloudClient.ensureLogin();
+    const manifests = scanManifestsUnderRoot(getScanRoot());
+    if (!manifests.length) {
+      return { ok: false, message: '未找到任何 zhubo-control.manifest.json' };
+    }
+    const result = await cloudClient.importManifests(manifests);
+    fileLog.app(`manifest 导入: +${result.imported} 更新 ${result.updated}`);
+    return { ok: true, ...result, message: `导入 ${result.imported} 个，更新 ${result.updated} 个` };
+  });
+
+  ipcMain.handle('projects:refresh', async () => {
+    await cloudClient.ensureLogin();
+    const projects = await cloudClient.projects();
+    return enrichProjectsWithManifests(projects);
+  });
+
+  ipcMain.handle('projects:rescanDisk', async () => {
+    await cloudClient.ensureLogin();
+    try {
+      await cloudClient.requestRescan();
+    } catch {
+      /* agent may be offline — fall through to CLI */
+    }
+    const root = resolveMonorepoRoot();
+    if (root) {
+      const cli = await runAgentScanCli(root);
+      if (cli.ok) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const projects = await cloudClient.projects();
+        return { ok: true, message: cli.message, projects: enrichProjectsWithManifests(projects) };
+      }
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+    const projects = await cloudClient.projects();
+    return {
+      ok: true,
+      message: '已通知 Agent 扫描，请稍后刷新',
+      projects: enrichProjectsWithManifests(projects),
+    };
   });
 
   ipcMain.handle('app:getPath', (_e, name: string) => {

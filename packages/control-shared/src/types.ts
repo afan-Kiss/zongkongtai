@@ -10,12 +10,18 @@ export interface ScanProjectResult {
   code: string;
   localPath: string;
   category?: string;
+  locationType?: LocationType;
   packageManager?: string;
   startCommand?: string;
   devCommand?: string;
   buildCommand?: string;
+  desktopStartCommand?: string;
   pm2Name?: string;
   healthUrl?: string;
+  localWebUrl?: string;
+  localHealthUrl?: string;
+  publicUrl?: string;
+  gitRemote?: string;
   ports: ScanPortResult[];
   commands: ScanCommandResult[];
   notes?: string;

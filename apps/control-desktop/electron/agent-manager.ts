@@ -34,7 +34,7 @@ function appendAgentLog(line: string) {
   fs.appendFileSync(file, `[${new Date().toISOString()}] ${line}\n`, 'utf8');
 }
 
-function resolveMonorepoRoot(): string | null {
+export function resolveMonorepoRoot(): string | null {
   const cfg = loadConfig();
   const candidates = [
     path.join(cfg.scanRoot, '总控台'),
