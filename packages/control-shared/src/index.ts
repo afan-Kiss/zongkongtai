@@ -14,6 +14,8 @@ export {
   collectManifestPorts,
 } from './manifest';
 export { asArray, normalizeScanPayload, normalizeScanProject, normalizeScanFields } from './arrays';
+export * from './steward';
+export * from './gitSecurity';
 export type {
   ZhuboControlManifest,
   ManifestServiceEntry,

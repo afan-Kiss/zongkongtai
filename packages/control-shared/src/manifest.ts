@@ -53,6 +53,8 @@ export interface ZhuboControlManifest {
   ports?: number[];
   services?: ManifestServiceEntry[];
   control?: ManifestControlMeta;
+  /** 项目风险等级：low/medium/high/protected，控制 EXE 启停权限 */
+  riskLevel?: 'low' | 'medium' | 'high' | 'protected';
 }
 
 /** EXE 左侧分组顺序 */
@@ -146,6 +148,7 @@ export function readManifestJson(raw: unknown): ZhuboControlManifest | null {
       : undefined,
     control:
       o.control && typeof o.control === 'object' ? (o.control as ManifestControlMeta) : undefined,
+    riskLevel: o.riskLevel ? (String(o.riskLevel) as ZhuboControlManifest['riskLevel']) : undefined,
   };
 }
 
