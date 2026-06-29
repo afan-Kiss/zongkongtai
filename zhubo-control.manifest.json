@@ -12,10 +12,7 @@
   "localHealthUrl": "http://127.0.0.1:4790/api/health",
   "publicUrl": "http://8.137.126.18/control/",
   "healthType": "http",
-  "ports": [
-    4790,
-    4791
-  ],
+  "ports": [4790, 4791],
   "services": [
     {
       "name": "server",

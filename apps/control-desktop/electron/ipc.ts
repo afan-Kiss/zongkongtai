@@ -475,7 +475,11 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     }
     const result = await cloudClient.importManifests(manifests);
     fileLog.app(`manifest 导入: +${result.imported} 更新 ${result.updated}`);
-    return { ok: true, ...result, message: `导入 ${result.imported} 个，更新 ${result.updated} 个` };
+    return {
+      ok: true,
+      ...result,
+      message: `导入 ${result.imported} 个，更新 ${result.updated} 个`,
+    };
   });
 
   ipcMain.handle('projects:refresh', async () => {

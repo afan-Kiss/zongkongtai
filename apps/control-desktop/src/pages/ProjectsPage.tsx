@@ -128,8 +128,7 @@ export function ProjectsPage() {
           </Tooltip>
           <Tooltip content="读取各项目 zhubo-control.manifest.json 并导入总控档案">
             <Button size="sm" variant="secondary" disabled={!!busy} onClick={importManifests}>
-              <Upload className="h-3.5 w-3.5" />
-              从 manifest 导入
+              <Upload className="h-3.5 w-3.5" />从 manifest 导入
             </Button>
           </Tooltip>
         </div>

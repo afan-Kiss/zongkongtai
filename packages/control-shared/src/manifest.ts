@@ -107,7 +107,8 @@ export function readManifestJson(raw: unknown): ZhuboControlManifest | null {
     services: Array.isArray(o.services)
       ? (o.services as ManifestServiceEntry[]).filter((s) => s?.name && s?.command)
       : undefined,
-    control: o.control && typeof o.control === 'object' ? (o.control as ManifestControlMeta) : undefined,
+    control:
+      o.control && typeof o.control === 'object' ? (o.control as ManifestControlMeta) : undefined,
   };
 }
 
