@@ -85,6 +85,39 @@ def sftp_put(client: paramiko.SSHClient, local: Path, remote: str) -> None:
         sftp.close()
 
 
+def check_nginx_upload_dir(client: paramiko.SSHClient) -> None:
+    """检查 /var/lib/aa_nginx 父目录权限，不足 755 则修复（不重启 nginx）。"""
+    run(
+        client,
+        r"""
+set -e
+DIR="/var/lib/aa_nginx"
+if [ ! -d "$DIR" ]; then
+  echo "nginx 上传目录不存在: $DIR"
+  exit 0
+fi
+MODE=$(stat -c '%a' "$DIR" 2>/dev/null || echo unknown)
+echo "当前权限 $DIR: $MODE"
+NEED_FIX=0
+if [ "$MODE" != "755" ] && [ "$MODE" != "775" ] && [ "$MODE" != "777" ]; then
+  NEED_FIX=1
+fi
+# 770 等会导致 nginx worker 无法 traverse 父目录写 client_body
+if [ "$MODE" = "770" ] || [ "$MODE" = "750" ] || [ "$MODE" = "700" ]; then
+  NEED_FIX=1
+fi
+if [ "$NEED_FIX" = "1" ]; then
+  echo "权限不足，执行 chmod 755 $DIR（不重启 nginx）"
+  chmod 755 "$DIR"
+  NEW_MODE=$(stat -c '%a' "$DIR")
+  echo "修复后权限: $NEW_MODE"
+else
+  echo "权限正常，无需修复"
+fi
+""",
+    )
+
+
 def db_stats(client: paramiko.SSHClient, label: str) -> None:
     run(
         client,
@@ -115,6 +148,9 @@ PY
 def main() -> None:
     client = connect()
     try:
+        print("=== 部署前 nginx 上传目录权限 ===")
+        check_nginx_upload_dir(client)
+
         print("=== 部署前生产库检查 ===")
         db_stats(client, "部署前")
 
