@@ -1,0 +1,28 @@
+{
+  "name": "zhubo-control-center",
+  "version": "0.1.0",
+  "private": true,
+  "description": "珠宝项目总控台 Zhubo Control Center",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @zhubo/control-server\" \"npm run dev -w @zhubo/control-web\"",
+    "dev:server": "npm run dev -w @zhubo/control-server",
+    "dev:web": "npm run dev -w @zhubo/control-web",
+    "dev:agent": "npm run dev -w @zhubo/control-agent",
+    "dev:desktop": "npm run dev -w @zhubo/control-desktop",
+    "build": "npm run build -w @zhubo/control-shared && npm run build -w @zhubo/control-web && npm run build -w @zhubo/control-server",
+    "build:desktop": "npm run build -w @zhubo/control-desktop",
+    "pack:desktop": "npm run pack -w @zhubo/control-desktop",
+    "start": "npm run start -w @zhubo/control-server",
+    "db:generate": "npm run db:generate -w @zhubo/control-server",
+    "db:push": "npm run db:push -w @zhubo/control-server",
+    "db:seed": "npm run db:seed -w @zhubo/control-server",
+    "deploy:aliyun": "python deploy/aliyun/upload-and-deploy.py"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

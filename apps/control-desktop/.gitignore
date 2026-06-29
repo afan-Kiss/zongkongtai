@@ -1,0 +1,5 @@
+apps/control-desktop/dist-desktop/
+apps/control-desktop/dist/
+apps/control-desktop/dist-electron/
+apps/control-desktop/native-helper/publish/
+apps/control-desktop/.env.local

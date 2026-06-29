@@ -1,0 +1,94 @@
+{
+  "name": "@zhubo/control-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "珠宝本地总控工作台 Zhubo Desktop Control",
+  "main": "dist-electron/main.js",
+  "author": "Zhubo",
+  "scripts": {
+    "dev": "vite",
+    "build:renderer": "vite build",
+    "build:native": "dotnet publish native-helper/Zhubo.NativeHelper/Zhubo.NativeHelper.csproj -c Release -r win-x64 --self-contained false -o native-helper/publish",
+    "build": "vite build && npm run build:native",
+    "pack": "npm run build && electron-builder --win dir"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.4",
+    "@radix-ui/react-dropdown-menu": "^2.1.4",
+    "@radix-ui/react-scroll-area": "^1.2.2",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-tabs": "^1.1.2",
+    "@radix-ui/react-tooltip": "^1.1.6",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-search": "^0.15.0",
+    "@xterm/xterm": "^5.5.0",
+    "@zhubo/control-shared": "*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.469.0",
+    "node-pty": "^1.0.0",
+    "pidusage": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.6.0",
+    "tree-kill": "^1.2.2",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.6",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.zhubo.desktop-control",
+    "productName": "珠宝本地总控工作台",
+    "directories": {
+      "output": "dist-desktop",
+      "buildResources": "resources"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "native-helper/publish/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "native-helper/publish/zhubo-native-helper.exe",
+        "to": "native-helper/zhubo-native-helper.exe"
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "builder/启动珠宝本地总控工作台.bat",
+        "to": "."
+      },
+      {
+        "from": "builder/创建桌面快捷方式.bat",
+        "to": "."
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "asar": true,
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false
+  }
+}

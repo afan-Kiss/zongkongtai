@@ -1,0 +1,211 @@
+{
+  "at": "2026-06-29T10:38:40.331Z",
+  "configDir": "C:\\Users\\6\\AppData\\Roaming\\ZhuboDesktopControl",
+  "exePath": "E:\\我的软件源码\\总控台\\apps\\control-desktop\\dist-desktop\\win-unpacked\\珠宝本地总控工作台.exe",
+  "nativeHelper": "E:\\我的软件源码\\总控台\\apps\\control-desktop\\native-helper\\publish\\zhubo-native-helper.exe",
+  "cloudUrl": "http://8.137.126.18/control",
+  "results": [
+    {
+      "name": "辅助出库软件",
+      "steps": [
+        {
+          "step": "path",
+          "ok": true,
+          "detail": "E:\\我的软件源码\\辅助出库软件"
+        },
+        {
+          "step": "start",
+          "ok": true,
+          "detail": "chcp 65001 >nul & dist\\库存出入库辅助.exe"
+        },
+        {
+          "step": "embedded-cmd",
+          "ok": true,
+          "detail": "windowsHide + cmd /c（模拟 EXE 内嵌终端）"
+        },
+        {
+          "step": "health",
+          "ok": true,
+          "detail": "GUI 程序，跳过 HTTP 健康检查"
+        },
+        {
+          "step": "stop",
+          "ok": true,
+          "detail": "已 tree-kill"
+        },
+        {
+          "step": "restart",
+          "ok": true,
+          "detail": "再次启动"
+        },
+        {
+          "step": "restart-ok",
+          "ok": true,
+          "detail": "二次启动正常"
+        }
+      ],
+      "success": true
+    },
+    {
+      "name": "祥钰系统",
+      "steps": [
+        {
+          "step": "path",
+          "ok": true,
+          "detail": "E:\\我的软件源码\\祥钰系统"
+        },
+        {
+          "step": "port-preflight",
+          "ok": true,
+          "detail": "端口 4726 已被占用，但 health 正常（服务已在运行）"
+        },
+        {
+          "step": "already-running",
+          "ok": true,
+          "detail": "HTTP 200"
+        }
+      ],
+      "success": true,
+      "alreadyRunning": true
+    },
+    {
+      "name": "扫码枪登记出入库系统",
+      "steps": [
+        {
+          "step": "path",
+          "ok": true,
+          "detail": "E:\\我的软件源码\\扫码枪登记出入库系统"
+        },
+        {
+          "step": "port-preflight",
+          "ok": true,
+          "detail": "端口 4725 已被占用，但 health 正常（服务已在运行）"
+        },
+        {
+          "step": "already-running",
+          "ok": true,
+          "detail": "HTTP 200"
+        }
+      ],
+      "success": true,
+      "alreadyRunning": true
+    },
+    {
+      "name": "记账系统",
+      "steps": [
+        {
+          "step": "path",
+          "ok": true,
+          "detail": "E:\\我的软件源码\\记账系统"
+        },
+        {
+          "step": "port-preflight",
+          "ok": true,
+          "detail": "端口 3001 空闲"
+        },
+        {
+          "step": "start",
+          "ok": true,
+          "detail": "chcp 65001 >nul & npm run dev"
+        },
+        {
+          "step": "embedded-cmd",
+          "ok": true,
+          "detail": "windowsHide + cmd /c（模拟 EXE 内嵌终端）"
+        },
+        {
+          "step": "health",
+          "ok": true,
+          "detail": "HTTP 200"
+        },
+        {
+          "step": "web",
+          "ok": false,
+          "detail": "Web 打开失败"
+        },
+        {
+          "step": "stop",
+          "ok": true,
+          "detail": "进程已停干净"
+        },
+        {
+          "step": "restart",
+          "ok": true,
+          "detail": "再次启动"
+        },
+        {
+          "step": "restart-ok",
+          "ok": true,
+          "detail": "HTTP 200"
+        }
+      ],
+      "success": true
+    }
+  ],
+  "exeExists": true,
+  "configExists": false,
+  "logDir": "C:\\Users\\6\\AppData\\Roaming\\ZhuboDesktopControl\\logs",
+  "batFiles": [
+    {
+      "name": "启动珠宝本地总控工作台.bat",
+      "exists": true
+    },
+    {
+      "name": "创建桌面快捷方式.bat",
+      "exists": true
+    }
+  ],
+  "cloud": {
+    "health": {
+      "ok": true,
+      "status": 200
+    },
+    "qianfanShops": [
+      {
+        "shopName": "拾玉居和田玉",
+        "found": true,
+        "updatedAt": "2026-06-29T10:30:16.687Z",
+        "source": "千帆中转机器人"
+      },
+      {
+        "shopName": "和田雅玉",
+        "found": false,
+        "updatedAt": null,
+        "source": null
+      },
+      {
+        "shopName": "祥钰珠宝",
+        "found": false,
+        "updatedAt": null,
+        "source": null
+      },
+      {
+        "shopName": "XY祥钰珠宝",
+        "found": false,
+        "updatedAt": null,
+        "source": null
+      }
+    ],
+    "login": true,
+    "qianfanFound": 1
+  },
+  "legacy4791": {
+    "listening": true,
+    "pid": 14648,
+    "cmdPreview": "\"E:\\node.js\\node.exe\" dist/index.js",
+    "likelyControlDebug": false
+  },
+  "nativeHelperTest": {
+    "ok": true,
+    "windowCount": 5,
+    "qianfanCount": 0,
+    "selfCount": 0,
+    "qianfanTitles": []
+  },
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "qianfanShopsFound": 1
+  }
+}

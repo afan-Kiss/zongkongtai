@@ -1,0 +1,15 @@
+{
+  "辅助出库软件": {
+    "command": "dist\\库存出入库辅助.exe",
+    "note": "PyInstaller GUI，会弹出独立窗口"
+  },
+  "祥钰系统": {
+    "command": "node server/index.js"
+  },
+  "扫码枪登记出入库系统": {
+    "command": "npm run dev"
+  },
+  "记账系统": {
+    "command": "npm run dev"
+  }
+}
