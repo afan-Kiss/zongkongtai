@@ -280,7 +280,7 @@ export async function importScanResults(
         portCount++;
       }
 
-      for (const cmd of sp.commands) {
+      for (const cmd of sp.commands ?? []) {
         const existing = await prisma.commandProfile.findFirst({
           where: { projectId: project.id, name: cmd.name, command: cmd.command },
         });
