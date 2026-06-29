@@ -20,9 +20,12 @@
     "db:generate": "npm run db:generate -w @zhubo/control-server",
     "db:push": "npm run db:push -w @zhubo/control-server",
     "db:seed": "npm run db:seed -w @zhubo/control-server",
-    "deploy:aliyun": "python deploy/aliyun/upload-and-deploy.py"
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
+    "check": "npm run format:check && npm run build"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "prettier": "^3.4.2"
   }
 }

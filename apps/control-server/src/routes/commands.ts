@@ -27,7 +27,10 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, async (req, res) => {
-  const command = await prisma.commandProfile.update({ where: { id: paramId(req) }, data: req.body });
+  const command = await prisma.commandProfile.update({
+    where: { id: paramId(req) },
+    data: req.body,
+  });
   res.json(command);
 });
 

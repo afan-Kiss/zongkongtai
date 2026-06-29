@@ -12,7 +12,10 @@ interface ConnectedAgent {
 
 class AgentHub {
   private agents = new Map<string, ConnectedAgent>();
-  private pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
+  private pending = new Map<
+    string,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
+  >();
 
   getOnlineAgents() {
     return Array.from(this.agents.values()).map((a) => ({

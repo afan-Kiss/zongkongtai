@@ -18,7 +18,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   useEffect(() => {
-    api.me().then(() => setOk(true)).catch(() => setOk(false));
+    api
+      .me()
+      .then(() => setOk(true))
+      .catch(() => setOk(false));
   }, [location.pathname]);
 
   if (ok === null) return <div style={{ padding: 40 }}>加载中...</div>;
@@ -30,7 +33,14 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<DashboardPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />

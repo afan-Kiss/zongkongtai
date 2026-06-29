@@ -61,12 +61,14 @@ export async function recomputePortConflicts() {
   const activePorts = ports.filter((p) => !p.project?.archived);
 
   for (const p of activePorts) {
-    const role = p.role || inferPortRole({
-      sourceType: p.sourceType,
-      purpose: p.purpose,
-      sourceFile: p.sourceFile,
-      port: p.port,
-    });
+    const role =
+      p.role ||
+      inferPortRole({
+        sourceType: p.sourceType,
+        purpose: p.purpose,
+        sourceFile: p.sourceFile,
+        port: p.port,
+      });
     if (p.role !== role) {
       await prisma.portUsage.update({ where: { id: p.id }, data: { role } });
       p.role = role;
@@ -83,13 +85,20 @@ export async function recomputePortConflicts() {
 
   for (const [, list] of byHostPort) {
     const listeners = list.filter((p) => {
-      const role = p.role || inferPortRole({
-        sourceType: p.sourceType,
-        purpose: p.purpose,
-        sourceFile: p.sourceFile,
-        port: p.port,
-      });
-      return isListenerRole(role) || (role === 'unknown' && isListenerSourceType(p.sourceType) && /PORT\s*=|port\s*:|"port"|\.listen\s*\(/i.test(p.purpose || ''));
+      const role =
+        p.role ||
+        inferPortRole({
+          sourceType: p.sourceType,
+          purpose: p.purpose,
+          sourceFile: p.sourceFile,
+          port: p.port,
+        });
+      return (
+        isListenerRole(role) ||
+        (role === 'unknown' &&
+          isListenerSourceType(p.sourceType) &&
+          /PORT\s*=|port\s*:|"port"|\.listen\s*\(/i.test(p.purpose || ''))
+      );
     });
     const listenerProjects = new Map<string, typeof list>();
     for (const p of listeners) {
@@ -236,7 +245,10 @@ export async function importScanResults(
       });
 
       if (existing) {
-        await prisma.portUsage.update({ where: { id: existing.id }, data: { ...data, updatedAt: scannedAt } });
+        await prisma.portUsage.update({
+          where: { id: existing.id },
+          data: { ...data, updatedAt: scannedAt },
+        });
       } else {
         await prisma.portUsage.create({ data });
       }
@@ -324,14 +336,18 @@ export async function importScanResults(
 
   const archivedProjects = await archiveStaleProjects(scannedCodes, scannedNames);
 
-  const conflictCount = await prisma.portUsage.groupBy({
-    by: ['port'],
-    where: { conflictLevel: 'conflict', runtimeStatus: { not: 'stale' } },
-  }).then((rows) => rows.length);
-  const warningCount = await prisma.portUsage.groupBy({
-    by: ['port'],
-    where: { conflictLevel: 'warning', runtimeStatus: { not: 'stale' } },
-  }).then((rows) => rows.length);
+  const conflictCount = await prisma.portUsage
+    .groupBy({
+      by: ['port'],
+      where: { conflictLevel: 'conflict', runtimeStatus: { not: 'stale' } },
+    })
+    .then((rows) => rows.length);
+  const warningCount = await prisma.portUsage
+    .groupBy({
+      by: ['port'],
+      where: { conflictLevel: 'warning', runtimeStatus: { not: 'stale' } },
+    })
+    .then((rows) => rows.length);
 
   return {
     projectCount: payload.projects.length,

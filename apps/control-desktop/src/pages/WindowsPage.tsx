@@ -35,7 +35,9 @@ export function WindowsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">窗口管理</h1>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={refresh}>刷新列表</Button>
+          <Button variant="secondary" onClick={refresh}>
+            刷新列表
+          </Button>
           <Button onClick={arrange}>千帆左 + 总控右 排列</Button>
         </div>
       </div>
@@ -64,7 +66,9 @@ export function WindowsPage() {
                   <td className="max-w-xs truncate p-2">{w.title}</td>
                   <td className="p-2">{w.processName}</td>
                   <td className="p-2">{w.pid}</td>
-                  <td className="p-2">{w.width}x{w.height}</td>
+                  <td className="p-2">
+                    {w.width}x{w.height}
+                  </td>
                 </tr>
               ))}
             </tbody>

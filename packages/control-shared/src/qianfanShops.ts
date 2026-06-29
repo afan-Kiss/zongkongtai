@@ -20,7 +20,10 @@ export const QIANFAN_TEST_SHOP_EXACT = new Set([
 ]);
 
 /** 标题/页面名 → canonical 的 alias 规则（按优先级） */
-export const QIANFAN_SHOP_ALIAS_RULES: Array<{ canonical: QianfanCanonicalShop; patterns: RegExp[] }> = [
+export const QIANFAN_SHOP_ALIAS_RULES: Array<{
+  canonical: QianfanCanonicalShop;
+  patterns: RegExp[];
+}> = [
   { canonical: 'XY祥钰珠宝', patterns: [/XY\s*祥钰/i, /XY祥钰珠宝/i] },
   { canonical: '拾玉居和田玉', patterns: [/拾玉居/i] },
   { canonical: '和田雅玉', patterns: [/和田雅玉/i] },
@@ -103,7 +106,10 @@ export function buildQianfanShopCards(secrets: Array<Record<string, unknown>>): 
     const row =
       qianfan.find((s) => s.shopName === shopName) ||
       qianfan.find((s) => s.canonicalShopName === shopName) ||
-      qianfan.find((s) => resolveCanonicalQianfanShopName(String(s.rawShopName || s.shopName || '')) === shopName);
+      qianfan.find(
+        (s) =>
+          resolveCanonicalQianfanShopName(String(s.rawShopName || s.shopName || '')) === shopName,
+      );
 
     const updatedAt = (row?.updatedAt || row?.lastSeenAt) as string | null | undefined;
     const ageMs = updatedAt ? Date.now() - Date.parse(String(updatedAt)) : null;
@@ -112,7 +118,9 @@ export function buildQianfanShopCards(secrets: Array<Record<string, unknown>>): 
       shopName,
       canonicalShopName: shopName,
       found: !!row,
-      rawShopName: (row?.rawShopName as string) || (row?.shopName !== shopName ? (row?.shopName as string) : null),
+      rawShopName:
+        (row?.rawShopName as string) ||
+        (row?.shopName !== shopName ? (row?.shopName as string) : null),
       status: (row?.status as string) || (row ? 'unknown' : 'missing'),
       updatedAt: updatedAt ? String(updatedAt) : null,
       stale: ageMs != null ? ageMs > 3 * 3600000 : true,

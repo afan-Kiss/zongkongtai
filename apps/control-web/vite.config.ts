@@ -7,7 +7,10 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@zhubo/control-shared': path.resolve(__dirname, '../../packages/control-shared/src/index.ts'),
+      '@zhubo/control-shared': path.resolve(
+        __dirname,
+        '../../packages/control-shared/src/index.ts',
+      ),
     },
   },
   server: {

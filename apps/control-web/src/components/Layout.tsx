@@ -14,7 +14,9 @@ export function Layout() {
       <aside className="sidebar">
         <h1>珠宝项目总控台</h1>
         <nav>
-          <NavLink to="/" end>首页仪表盘</NavLink>
+          <NavLink to="/" end>
+            首页仪表盘
+          </NavLink>
           <NavLink to="/projects">项目管理</NavLink>
           <NavLink to="/ports">端口管理</NavLink>
           <NavLink to="/secrets">Cookie 管理</NavLink>
@@ -24,7 +26,9 @@ export function Layout() {
           <NavLink to="/operations">操作记录</NavLink>
         </nav>
         <div style={{ padding: '20px' }}>
-          <button className="btn btn-secondary btn-sm" onClick={logout}>退出登录</button>
+          <button className="btn btn-secondary btn-sm" onClick={logout}>
+            退出登录
+          </button>
         </div>
       </aside>
       <main className="main">
@@ -78,7 +82,11 @@ export function RoleBadge({ role }: { role?: string }) {
   return <span className="badge badge-gray">{ROLE_LABEL[r] || r}</span>;
 }
 
-export function formatOperation(log: { action: string; detailJson?: string | null; actor: string }) {
+export function formatOperation(log: {
+  action: string;
+  detailJson?: string | null;
+  actor: string;
+}) {
   if (log.action === 'scan_upload' && log.detailJson) {
     try {
       const d = JSON.parse(log.detailJson);

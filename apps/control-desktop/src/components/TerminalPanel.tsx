@@ -5,6 +5,8 @@ import { SearchAddon } from '@xterm/addon-search';
 import { Maximize2, Minimize2, X, Trash2, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { TerminalStack } from '@/components/TerminalStack';
 import { useAppStore } from '@/stores/appStore';
 import '@xterm/xterm/css/xterm.css';
 
@@ -77,7 +79,11 @@ function TermView({ projectId, projectName }: { projectId: string; projectName: 
           >
             复制
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => window.zhuboDesktop.process.clearLogs(projectId)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => window.zhuboDesktop.process.clearLogs(projectId)}
+          >
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
@@ -100,7 +106,15 @@ export function TerminalPanel() {
   const tabs = Object.values(processes).length
     ? Object.values(processes)
     : activeId
-      ? [{ projectId: activeId, projectName: projects.find((p) => p.id === activeId)?.name || '终端', status: 'idle' as const, command: '', cwd: '' }]
+      ? [
+          {
+            projectId: activeId,
+            projectName: projects.find((p) => p.id === activeId)?.name || '终端',
+            status: 'idle' as const,
+            command: '',
+            cwd: '',
+          },
+        ]
       : [];
 
   const [tabIds, setTabIds] = useState<string[]>([]);
@@ -114,23 +128,47 @@ export function TerminalPanel() {
   if (!expanded && !fullscreen) {
     return (
       <div className="border-t border-border px-4 py-1">
-        <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setExpanded(true)}>
-          展开终端面板
-        </button>
+        <Tooltip content="切换到底部终端">
+          <button
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setExpanded(true)}
+          >
+            展开终端面板
+          </button>
+        </Tooltip>
       </div>
     );
   }
 
   const height = fullscreen ? '100vh' : 280;
   const current = activeId || tabIds[0];
+  const currentProc = current ? processes[current] : undefined;
+  const sessions = currentProc?.sessions || [];
+  const activeSessionId = sessions.find((s) => s.type === 'terminal')?.sessionId || null;
 
   return (
     <motion.div
       layout
-      className={fullscreen ? 'fixed inset-0 z-40 bg-background' : 'border-t border-border'}
-      style={{ height: fullscreen ? '100vh' : height }}
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: fullscreen ? '100vh' : height, opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+      className={
+        fullscreen
+          ? 'fixed inset-0 z-[var(--z-terminal)] bg-background'
+          : 'border-t border-border overflow-hidden'
+      }
     >
       <div className="flex h-full flex-col">
+        {sessions.length > 1 && (
+          <div className="px-2 pt-2">
+            <TerminalStack
+              sessions={sessions}
+              activeId={activeSessionId}
+              onSelect={() => setActive(current!)}
+            />
+          </div>
+        )}
         <div className="flex items-center gap-2 border-b border-border px-2 py-1">
           <div className="flex flex-1 gap-1 overflow-x-auto">
             {tabIds.map((id) => {
@@ -158,12 +196,24 @@ export function TerminalPanel() {
         <div className="min-h-0 flex-1">
           <AnimatePresence mode="wait">
             {current && (
-              <motion.div key={current} className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <TermView projectId={current} projectName={projects.find((p) => p.id === current)?.name || '终端'} />
+              <motion.div
+                key={current}
+                className="h-full"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                <TermView
+                  projectId={current}
+                  projectName={projects.find((p) => p.id === current)?.name || '终端'}
+                />
               </motion.div>
             )}
           </AnimatePresence>
-          {!current && <div className="flex h-full items-center justify-center text-sm text-muted-foreground">启动项目后终端会出现在这里</div>}
+          {!current && (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              启动项目后终端会出现在这里
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

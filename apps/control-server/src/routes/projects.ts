@@ -34,7 +34,11 @@ router.post('/', requireAuth, async (req, res) => {
 router.get('/:id', requireAuth, async (req, res) => {
   const project = await prisma.project.findUnique({
     where: { id: paramId(req) },
-    include: { ports: true, commands: true, healthResults: { orderBy: { checkedAt: 'desc' }, take: 20 } },
+    include: {
+      ports: true,
+      commands: true,
+      healthResults: { orderBy: { checkedAt: 'desc' }, take: 20 },
+    },
   });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   res.json(project);
@@ -65,7 +69,10 @@ router.delete('/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-async function runProjectAction(req: import('express').Request, action: 'start' | 'stop' | 'restart') {
+async function runProjectAction(
+  req: import('express').Request,
+  action: 'start' | 'stop' | 'restart',
+) {
   const projectId = paramId(req);
   const project = await prisma.project.findUnique({
     where: { id: projectId },

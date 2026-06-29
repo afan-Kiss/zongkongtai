@@ -37,7 +37,10 @@ export class CloudClient {
     const res = await fetch(`${this.baseUrl}${pathname}`, { ...options, headers });
     const setCookie = res.headers.get('set-cookie');
     if (setCookie) {
-      this.cookie = setCookie.split(',').map((s) => s.split(';')[0].trim()).join('; ');
+      this.cookie = setCookie
+        .split(',')
+        .map((s) => s.split(';')[0].trim())
+        .join('; ');
       setSessionCookie(this.cookie);
     }
     const data = await res.json().catch(() => ({}));

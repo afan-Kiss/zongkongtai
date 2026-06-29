@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { NavPage, ProcessInfo, Project, ToastItem } from '@/types/desktop';
+import type { AgentStatus, NavPage, ProcessInfo, Project, ToastItem } from '@/types/desktop';
 
 interface AppState {
   page: NavPage;
@@ -7,6 +7,7 @@ interface AppState {
   cloudConnected: boolean;
   cloudMessage: string;
   agentsOnline: number;
+  agentStatus: AgentStatus | null;
   conflictCount: number;
   warningCount: number;
   runningCount: number;
@@ -20,6 +21,7 @@ interface AppState {
   qianfanCookieUpdatedAt: string | null;
   qianfanCookieHash: string | null;
   setCloud: (ok: boolean, msg: string, extra?: Partial<AppState>) => void;
+  setAgentStatus: (s: AgentStatus | null) => void;
   setProjects: (p: Project[]) => void;
   selectProject: (id: string | null) => void;
   setProcess: (proc: ProcessInfo) => void;
@@ -37,6 +39,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   cloudConnected: false,
   cloudMessage: '尚未连接',
   agentsOnline: 0,
+  agentStatus: null,
   conflictCount: 0,
   warningCount: 0,
   runningCount: 0,
@@ -50,6 +53,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   qianfanCookieUpdatedAt: null,
   qianfanCookieHash: null,
   setCloud: (ok, msg, extra) => set({ cloudConnected: ok, cloudMessage: msg, ...extra }),
+  setAgentStatus: (agentStatus) =>
+    set({
+      agentStatus,
+      agentsOnline: agentStatus?.cloudOnline ? 1 : 0,
+    }),
   setProjects: (projects) => set({ projects }),
   selectProject: (id) => set({ selectedProjectId: id }),
   setProcess: (proc) =>
@@ -67,5 +75,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     setTimeout(() => get().removeToast(id), 4500);
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-  setQianfanCookie: (updatedAt, hash) => set({ qianfanCookieUpdatedAt: updatedAt, qianfanCookieHash: hash }),
+  setQianfanCookie: (updatedAt, hash) =>
+    set({ qianfanCookieUpdatedAt: updatedAt, qianfanCookieHash: hash }),
 }));

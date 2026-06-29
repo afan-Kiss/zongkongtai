@@ -50,7 +50,14 @@ export interface AgentScanPayload {
 }
 
 export type AgentMessage =
-  | { type: 'register'; name: string; machineName: string; os: string; basePath: string; version: string }
+  | {
+      type: 'register';
+      name: string;
+      machineName: string;
+      os: string;
+      basePath: string;
+      version: string;
+    }
   | { type: 'heartbeat' }
   | { type: 'scan_result'; payload: AgentScanPayload }
   | { type: 'command_result'; requestId: string; ok: boolean; message: string; detail?: unknown }
@@ -60,5 +67,12 @@ export type ServerAgentMessage =
   | { type: 'registered'; agentId: string }
   | { type: 'ping' }
   | { type: 'request_scan' }
-  | { type: 'run_command'; requestId: string; projectId: string; commandId: string; command: string; cwd: string }
+  | {
+      type: 'run_command';
+      requestId: string;
+      projectId: string;
+      commandId: string;
+      command: string;
+      cwd: string;
+    }
   | { type: 'stop_command'; requestId: string; projectId: string; commandId: string };

@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-electron
+dist-desktop
+build
+coverage
+.turbo
+.vite
+*.db
+*.db-journal
+package-lock.json
+apps/control-desktop/native-helper/**/bin
+apps/control-desktop/native-helper/**/obj
+apps/control-desktop/native-helper/publish
+deploy-output-credentials.txt
+deploy-output.txt

@@ -73,7 +73,9 @@ function doScan() {
   try {
     const payload = scanRoot(agentConfig.scanRoot, agentId);
     payload.scanDurationMs = Date.now() - t0;
-    console.log(`Found ${payload.projects.length} projects, ${payload.runtimePorts.length} runtime ports (${payload.scanDurationMs}ms)`);
+    console.log(
+      `Found ${payload.projects.length} projects, ${payload.runtimePorts.length} runtime ports (${payload.scanDurationMs}ms)`,
+    );
     ws?.send(JSON.stringify({ type: 'scan_result', payload }));
   } catch (e) {
     console.error('Scan failed', e);

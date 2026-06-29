@@ -46,7 +46,9 @@ export function Sidebar() {
             onClick={() => setPage(id)}
             className={cn(
               'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-              page === id ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              page === id
+                ? 'bg-primary/15 text-primary'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >
             <Icon className="h-4 w-4" />
@@ -65,45 +67,86 @@ function VersionFooter() {
     window.zhuboDesktop.app.getVersion().then(setVersion);
   }, []);
   return (
-    <div className="mt-auto px-2 pb-1 text-[10px] text-muted-foreground">
-      v{version || '…'}
-    </div>
+    <div className="mt-auto px-2 pb-1 text-[10px] text-muted-foreground">v{version || '…'}</div>
   );
 }
 
 export function TopBar() {
   const cloudConnected = useAppStore((s) => s.cloudConnected);
   const cloudMessage = useAppStore((s) => s.cloudMessage);
-  const agentsOnline = useAppStore((s) => s.agentsOnline);
+  const agentStatus = useAppStore((s) => s.agentStatus);
   const conflictCount = useAppStore((s) => s.conflictCount);
   const warningCount = useAppStore((s) => s.warningCount);
   const runningCount = useAppStore((s) => s.runningCount);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
 
+  const agentLabel = (() => {
+    if (!agentStatus) return { ok: false, text: '检查中…', warn: false };
+    switch (agentStatus.state) {
+      case 'online':
+        return {
+          ok: true,
+          text: `在线 · ${agentStatus.lastHeartbeatAgeSec != null ? `${agentStatus.lastHeartbeatAgeSec} 秒前` : '刚刚'}`,
+          warn: false,
+        };
+      case 'starting':
+        return { ok: false, text: '正在启动', warn: true };
+      case 'start_failed':
+        return { ok: false, text: '启动失败', warn: false };
+      default:
+        return { ok: false, text: agentStatus.message || '离线', warn: false };
+    }
+  })();
+
   const items = [
-    { label: '云端总控', ok: cloudConnected, text: cloudConnected ? '已连接' : cloudMessage },
-    { label: '本地 Agent', ok: agentsOnline > 0, text: agentsOnline > 0 ? '在线' : '离线' },
+    {
+      label: '云端总控',
+      ok: cloudConnected,
+      text: cloudConnected ? '已连接' : cloudMessage,
+      warn: false,
+    },
+    {
+      label: '本地 Agent',
+      ok: agentLabel.ok,
+      text: agentLabel.text,
+      warn: agentLabel.warn,
+      title: agentStatus ? `${agentStatus.message}\n连接：${agentStatus.serverUrl}` : undefined,
+    },
     {
       label: '千帆 Cookie',
       ok: !!qianfanCookieUpdatedAt && Date.now() - Date.parse(qianfanCookieUpdatedAt) < 3 * 3600000,
-      text: qianfanCookieUpdatedAt ? `${Math.max(1, Math.floor((Date.now() - Date.parse(qianfanCookieUpdatedAt)) / 60000))} 分钟前` : '无记录',
+      text: qianfanCookieUpdatedAt
+        ? `${Math.max(1, Math.floor((Date.now() - Date.parse(qianfanCookieUpdatedAt)) / 60000))} 分钟前`
+        : '无记录',
+      warn: false,
     },
-    { label: '端口冲突', ok: conflictCount === 0, text: `${conflictCount} 个`, warn: conflictCount > 0 },
-    { label: '运行项目', ok: true, text: `${runningCount} 个` },
+    {
+      label: '端口冲突',
+      ok: conflictCount === 0,
+      text: `${conflictCount} 个`,
+      warn: conflictCount > 0,
+    },
+    { label: '运行项目', ok: true, text: `${runningCount} 个`, warn: false },
   ];
 
   return (
     <header className="flex h-12 items-center gap-4 border-b border-border px-4 text-xs">
       {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2">
+        <div
+          key={item.label}
+          className={cn('flex items-center gap-2', item.warn && !item.ok && 'animate-pulse-soft')}
+          title={item.title}
+        >
           <span
             className={cn(
               'h-2 w-2 rounded-full',
-              item.ok ? 'bg-green-400' : item.warn ? 'bg-amber-400' : 'bg-red-400',
+              item.ok ? 'bg-green-400' : item.warn ? 'bg-amber-400 animate-pulse' : 'bg-red-400',
             )}
           />
           <span className="text-muted-foreground">{item.label}</span>
-          <span className="font-medium">{item.text}</span>
+          <span className="max-w-[180px] truncate font-medium" title={item.text}>
+            {item.text}
+          </span>
         </div>
       ))}
       {warningCount > 0 && <span className="ml-auto text-amber-400">提醒 {warningCount}</span>}

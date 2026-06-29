@@ -15,6 +15,7 @@ HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
 USER = os.environ.get("DEPLOY_USER", "root")
 PASSWORD = os.environ.get("SSH_PASS", "")
 DEPLOY_DIR = "/www/wwwroot/zhubo-control-center"
+PUBLIC_HEALTH = f"http://{HOST}/control/api/health"
 
 SKIP_DIRS = {"node_modules", ".git", "dist", "build", ".vite", "coverage", "logs", "tmp", "cache"}
 SKIP_PARTS = {".env", "dev.db", "dev.db-journal", "__pycache__", "prod.db", "prod.db-journal"}
@@ -131,7 +132,7 @@ cd {DEPLOY_DIR}
 pm2 restart zhubo-control-center || pm2 start ecosystem.config.cjs
 pm2 save
 sleep 2
-curl -sf http://127.0.0.1:4790/api/health
+curl -sf {PUBLIC_HEALTH}
 """,
         )
         if code != 0:

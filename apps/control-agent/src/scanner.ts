@@ -87,7 +87,17 @@ function readPackageJson(projectDir: string): ScanCommandResult[] {
           name: key,
           command: scripts[key],
           cwd: projectDir,
-          type: (key === 'dev' ? 'dev' : key === 'build' ? 'build' : key === 'deploy' ? 'deploy' : key === 'test' ? 'test' : key === 'worker' ? 'worker' : 'custom') as CommandType,
+          type: (key === 'dev'
+            ? 'dev'
+            : key === 'build'
+              ? 'build'
+              : key === 'deploy'
+                ? 'deploy'
+                : key === 'test'
+                  ? 'test'
+                  : key === 'worker'
+                    ? 'worker'
+                    : 'custom') as CommandType,
         });
       }
     }
@@ -133,7 +143,10 @@ function buildProcessNameMap(): Map<number, string> {
     }
   } catch {
     try {
-      const out = execSync('tasklist /FO CSV /NH', { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+      const out = execSync('tasklist /FO CSV /NH', {
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+      });
       for (const line of out.split(/\r?\n/)) {
         const parts = line.match(/"([^"]+)","(\d+)"/);
         if (parts) map.set(Number(parts[2]), parts[1]);
@@ -155,7 +168,11 @@ function detectPackageManager(projectDir: string): string {
 
 function scanProjectDir(projectDir: string, rootName: string): ScanProjectResult {
   const name = path.basename(projectDir);
-  const code = name.replace(/[^\w\u4e00-\u9fa5-]/g, '-').toLowerCase().slice(0, 40) || rootName;
+  const code =
+    name
+      .replace(/[^\w\u4e00-\u9fa5-]/g, '-')
+      .toLowerCase()
+      .slice(0, 40) || rootName;
   const files = walkFiles(projectDir, projectDir);
   const ports: ScanPortResult[] = [];
   const portSeen = new Set<string>();
@@ -197,11 +214,18 @@ function scanProjectDir(projectDir: string, rootName: string): ScanProjectResult
   }
 
   const port4723 = ports.find((p) => p.port === 4723);
-  const healthUrl = port4723 ? 'http://127.0.0.1:4723/api/health' : ports[0] ? `http://127.0.0.1:${ports[0].port}/api/health` : undefined;
+  const healthUrl = port4723
+    ? 'http://127.0.0.1:4723/api/health'
+    : ports[0]
+      ? `http://127.0.0.1:${ports[0].port}/api/health`
+      : undefined;
 
   const gitRemote = getGitRemote(projectDir);
   const readmeNote = readReadmeNotes(projectDir);
-  const notesParts = [gitRemote ? `Git: ${gitRemote}` : '', readmeNote ? `README: ${readmeNote}` : ''].filter(Boolean);
+  const notesParts = [
+    gitRemote ? `Git: ${gitRemote}` : '',
+    readmeNote ? `README: ${readmeNote}` : '',
+  ].filter(Boolean);
 
   return {
     name,
@@ -250,7 +274,9 @@ export function scanRoot(basePath: string, agentId: string): AgentScanPayload {
     if (!ent.isDirectory() || SCAN_EXCLUDE_DIRS.has(ent.name)) continue;
     const full = path.join(basePath, ent.name);
     const hasPkg = fs.existsSync(path.join(full, 'package.json'));
-    const hasPy = fs.existsSync(path.join(full, 'requirements.txt')) || fs.existsSync(path.join(full, 'pyproject.toml'));
+    const hasPy =
+      fs.existsSync(path.join(full, 'requirements.txt')) ||
+      fs.existsSync(path.join(full, 'pyproject.toml'));
     if (!hasPkg && !hasPy) {
       const sub = fs.readdirSync(full, { withFileTypes: true }).filter((s) => s.isDirectory());
       if (sub.some((s) => fs.existsSync(path.join(full, s.name, 'package.json')))) {

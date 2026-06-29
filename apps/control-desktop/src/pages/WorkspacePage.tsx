@@ -60,7 +60,11 @@ export function WorkspacePage() {
             </CardHeader>
             <CardContent>
               <Button onClick={() => run(ws.id)} disabled={!!running}>
-                {running === ws.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                {running === ws.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
                 一键启动
               </Button>
             </CardContent>
@@ -88,7 +92,9 @@ export function WorkspacePage() {
                   />
                   <div>
                     <div>{step.label}</div>
-                    {step.message && <div className="text-xs text-muted-foreground">{step.message}</div>}
+                    {step.message && (
+                      <div className="text-xs text-muted-foreground">{step.message}</div>
+                    )}
                   </div>
                 </motion.div>
               );

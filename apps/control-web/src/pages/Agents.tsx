@@ -17,7 +17,17 @@ export default function AgentsPage() {
       <p>本地 Windows Agent 主动连接云端 WebSocket，不对外暴露端口。</p>
       <div className="card">
         <table>
-          <thead><tr><th>名称</th><th>机器名</th><th>系统</th><th>扫描根目录</th><th>状态</th><th>最后在线</th><th>版本</th></tr></thead>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>机器名</th>
+              <th>系统</th>
+              <th>扫描根目录</th>
+              <th>状态</th>
+              <th>最后在线</th>
+              <th>版本</th>
+            </tr>
+          </thead>
           <tbody>
             {agents.map((a) => (
               <tr key={a.id}>
@@ -25,7 +35,9 @@ export default function AgentsPage() {
                 <td>{a.machineName || '-'}</td>
                 <td>{a.os || '-'}</td>
                 <td className="mono">{a.basePath || '-'}</td>
-                <td><StatusBadge status={a.online ? 'online' : 'offline'} /></td>
+                <td>
+                  <StatusBadge status={a.online ? 'online' : 'offline'} />
+                </td>
                 <td>{a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : '-'}</td>
                 <td>{a.version || '-'}</td>
               </tr>

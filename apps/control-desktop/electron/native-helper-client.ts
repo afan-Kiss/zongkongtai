@@ -74,10 +74,14 @@ export async function moveWindow(opts: {
 }) {
   const args = [
     'move-window',
-    '--x', String(opts.x),
-    '--y', String(opts.y),
-    '--width', String(opts.width),
-    '--height', String(opts.height),
+    '--x',
+    String(opts.x),
+    '--y',
+    String(opts.y),
+    '--width',
+    String(opts.width),
+    '--height',
+    String(opts.height),
   ];
   if (opts.hwnd) args.push('--hwnd', String(opts.hwnd));
   if (opts.pid) args.push('--pid', String(opts.pid));
@@ -103,7 +107,9 @@ export async function arrangeQianfanWorkspace(mainHwnd?: number) {
   const qianfanNames = ['千帆客服工作台', '千帆客服', '客服工作台', 'qianfan'];
   const windows = await listWindows();
   let qianfanWin = windows.find((w) =>
-    qianfanNames.some((n) => w.title.includes(n) || w.processName.toLowerCase().includes('qianfan')),
+    qianfanNames.some(
+      (n) => w.title.includes(n) || w.processName.toLowerCase().includes('qianfan'),
+    ),
   );
   if (!qianfanWin) {
     const byProc = await findWindowsByProcess('千帆客服工作台.exe');

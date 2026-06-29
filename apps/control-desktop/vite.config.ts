@@ -14,7 +14,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
-      '@zhubo/control-shared': path.resolve(__dirname, '../../packages/control-shared/src/index.ts'),
+      '@zhubo/control-shared': path.resolve(
+        __dirname,
+        '../../packages/control-shared/src/index.ts',
+      ),
     },
   },
   base: './',

@@ -92,7 +92,7 @@ export class ControlClient {
         console.warn(
           `[control-client] 总控台读取失败，使用本地 fallback Cookie：${
             err instanceof Error ? err.message : String(err)
-          }`
+          }`,
         );
         return params.fallbackValue;
       }

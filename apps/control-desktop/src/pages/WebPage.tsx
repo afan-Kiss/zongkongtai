@@ -10,12 +10,14 @@ export function WebPage() {
   const urls = [
     { name: '云端总控', url: 'http://8.137.126.18/control/' },
     { name: '云端主播分析', url: 'http://8.137.126.18/' },
-    ...projects
+    ...(projects
       .map((p) => {
-        const url = p.healthUrl?.replace(/\/api\/health\/?$/, '') || (p.ports?.[0] ? `http://127.0.0.1:${p.ports[0].port}` : null);
+        const url =
+          p.healthUrl?.replace(/\/api\/health\/?$/, '') ||
+          (p.ports?.[0] ? `http://127.0.0.1:${p.ports[0].port}` : null);
         return url ? { name: p.name, url, id: p.id } : null;
       })
-      .filter(Boolean) as { name: string; url: string; id?: string }[],
+      .filter(Boolean) as { name: string; url: string; id?: string }[]),
   ];
 
   return (
@@ -29,10 +31,17 @@ export function WebPage() {
               <div className="truncate text-xs text-muted-foreground">{u.url}</div>
             </CardHeader>
             <CardContent className="flex gap-2">
-              <Button size="sm" onClick={() => window.zhuboDesktop.webview.open(u.id || u.name, u.url)}>
+              <Button
+                size="sm"
+                onClick={() => window.zhuboDesktop.webview.open(u.id || u.name, u.url)}
+              >
                 内嵌打开
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => window.zhuboDesktop.shell.openExternal(u.url)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => window.zhuboDesktop.shell.openExternal(u.url)}
+              >
                 <ExternalLink className="h-3 w-3" /> 浏览器
               </Button>
               <Button

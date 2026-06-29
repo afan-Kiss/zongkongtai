@@ -20,7 +20,8 @@ export const api = {
   projects: (includeArchived = false) =>
     request<any[]>(`/api/projects${includeArchived ? '?includeArchived=1' : ''}`),
   project: (id: string) => request<any>(`/api/projects/${id}`),
-  createProject: (data: unknown) => request('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
+  createProject: (data: unknown) =>
+    request('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
   updateProject: (id: string, data: unknown) =>
     request(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
@@ -38,14 +39,20 @@ export const api = {
     const qs = q.toString();
     return request<any[]>(`/api/secrets${qs ? `?${qs}` : ''}`);
   },
-  alignQianfanSecrets: () => request<{ ok: boolean; archived: number; renamed: number }>('/api/secrets/maintenance/align-qianfan', { method: 'POST' }),
-  createSecret: (data: unknown) => request('/api/secrets', { method: 'POST', body: JSON.stringify(data) }),
+  alignQianfanSecrets: () =>
+    request<{ ok: boolean; archived: number; renamed: number }>(
+      '/api/secrets/maintenance/align-qianfan',
+      { method: 'POST' },
+    ),
+  createSecret: (data: unknown) =>
+    request('/api/secrets', { method: 'POST', body: JSON.stringify(data) }),
   updateSecret: (id: string, data: unknown) =>
     request(`/api/secrets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   testSecret: (id: string) => request(`/api/secrets/${id}/test`, { method: 'POST' }),
   secretAudit: () => request<any[]>('/api/secrets/audit'),
   commands: () => request<any[]>('/api/commands'),
-  createCommand: (data: unknown) => request('/api/commands', { method: 'POST', body: JSON.stringify(data) }),
+  createCommand: (data: unknown) =>
+    request('/api/commands', { method: 'POST', body: JSON.stringify(data) }),
   agents: () => request<any[]>('/api/agents'),
   healthResults: () => request<any[]>('/api/dashboard/health-results/list'),
   operations: () => request<any[]>('/api/dashboard/operations'),

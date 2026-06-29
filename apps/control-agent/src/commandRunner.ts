@@ -25,7 +25,9 @@ export async function runWhitelistedCommand(
   return { ok: true, message: `已启动: ${command}` };
 }
 
-export async function stopWhitelistedCommand(commandId: string): Promise<{ ok: boolean; message: string }> {
+export async function stopWhitelistedCommand(
+  commandId: string,
+): Promise<{ ok: boolean; message: string }> {
   const child = running.get(commandId);
   if (!child?.pid) return { ok: false, message: '未找到运行中的进程' };
   try {

@@ -1,14 +1,17 @@
 import os
 import paramiko
 
+HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
 PASSWORD = os.environ.get("SSH_PASS", "")
+PUBLIC_HEALTH = f"http://{HOST}/control/api/health"
+
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect("8.137.126.18", username="root", password=PASSWORD, timeout=60)
+c.connect(HOST, username="root", password=PASSWORD, timeout=60)
 
 cmds = [
-    "curl -sf http://127.0.0.1:4880/api/health",
-    "curl -sf --max-time 10 http://8.137.126.18:4880/api/health",
+    f"curl -sf http://127.0.0.1:4790/api/health",
+    f"curl -sf --max-time 10 {PUBLIC_HEALTH}",
     "systemctl reset-failed aa_nginx 2>/dev/null || true",
     "pm2 status | grep control",
 ]

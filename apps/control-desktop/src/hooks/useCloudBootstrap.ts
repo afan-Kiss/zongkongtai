@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { formatRelativeTime, hashPrefix } from '@/lib/utils';
 
@@ -6,53 +6,63 @@ export function useCloudBootstrap() {
   const setCloud = useAppStore((s) => s.setCloud);
   const setProjects = useAppStore((s) => s.setProjects);
   const setQianfanCookie = useAppStore((s) => s.setQianfanCookie);
+  const setAgentStatus = useAppStore((s) => s.setAgentStatus);
   const pushToast = useAppStore((s) => s.pushToast);
-  const toastOnFail = useRef(true);
-
-  const refresh = useCallback(async () => {
-    try {
-      const conn = await window.zhuboDesktop.cloud.connect();
-      if (!conn.ok) {
-        setCloud(false, conn.message);
-        if (toastOnFail.current) {
-          pushToast('error', conn.message);
-          toastOnFail.current = false;
-        }
-        return;
-      }
-      toastOnFail.current = false;
-      const [projects, dash, secrets] = await Promise.all([
-        window.zhuboDesktop.cloud.projects(),
-        window.zhuboDesktop.cloud.dashboard(),
-        window.zhuboDesktop.cloud.secrets().catch(() => []),
-      ]);
-      setProjects(projects);
-      setCloud(true, '已连接', {
-        agentsOnline: conn.agentsOnline ?? dash.agentsOnline ?? 0,
-        conflictCount: dash.conflictCount ?? 0,
-        warningCount: dash.warningCount ?? 0,
-      });
-      const qf = (secrets as any[]).find((s) => s.platform === 'qianfan' && s.keyName === 'cookie');
-      if (qf) setQianfanCookie(qf.updatedAt || qf.lastSeenAt, qf.cookieHash);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setCloud(false, msg);
-    }
-  }, [setCloud, setProjects, setQianfanCookie, pushToast]);
 
   useEffect(() => {
+    let toastOnFail = true;
+
+    const refresh = async () => {
+      try {
+        const conn = await window.zhuboDesktop.cloud.connect();
+        if (!conn.ok) {
+          setCloud(false, conn.message);
+          if (toastOnFail) {
+            pushToast('error', conn.message);
+            toastOnFail = false;
+          }
+          return;
+        }
+        toastOnFail = false;
+        const [projects, dash, secrets, agentSnap] = await Promise.all([
+          window.zhuboDesktop.cloud.projects(),
+          window.zhuboDesktop.cloud.dashboard(),
+          window.zhuboDesktop.cloud.secrets().catch(() => []),
+          window.zhuboDesktop.agent.status().catch(() => null),
+        ]);
+        setProjects(projects);
+        if (agentSnap) setAgentStatus(agentSnap as any);
+        setCloud(true, '已连接', {
+          agentsOnline: (agentSnap as any)?.cloudOnline ? 1 : (conn.agentsOnline ?? 0),
+          conflictCount: dash.conflictCount ?? 0,
+          warningCount: dash.warningCount ?? 0,
+        });
+        const qf = (secrets as any[]).find(
+          (s) => s.platform === 'qianfan' && s.keyName === 'cookie',
+        );
+        if (qf) setQianfanCookie(qf.updatedAt || qf.lastSeenAt, qf.cookieHash);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setCloud(false, msg);
+      }
+    };
+
     refresh();
     const t = setInterval(refresh, 30000);
-    const off = window.zhuboDesktop.onProcessStatus((proc: any) => {
+    const offProc = window.zhuboDesktop.onProcessStatus((proc: any) => {
       useAppStore.getState().setProcess(proc);
     });
+    const offAgent = window.zhuboDesktop.agent.onStatus((snap: any) => {
+      setAgentStatus(snap);
+    });
+    void window.zhuboDesktop.agent.ensure();
+
     return () => {
       clearInterval(t);
-      off();
+      offProc();
+      offAgent();
     };
-  }, [refresh]);
-
-  return { refresh };
+  }, [setCloud, setProjects, setQianfanCookie, setAgentStatus, pushToast]);
 }
 
 export function qianfanStaleMessage(updatedAt: string | null) {
@@ -61,8 +71,7 @@ export function qianfanStaleMessage(updatedAt: string | null) {
   if (age > 3 * 3600000) {
     return '千帆 Cookie 超过 3 小时没更新，请检查公司电脑千帆客服台是否在线。';
   }
-  return `千帆 Cookie ${formatRelativeTime(updatedAt)}前更新`;
+  return `Cookie 状态正常（${formatRelativeTime(updatedAt)}前更新）`;
 }
 
-/** @deprecated use qianfanStaleMessage */
 export const qianfanCookieMessage = qianfanStaleMessage;

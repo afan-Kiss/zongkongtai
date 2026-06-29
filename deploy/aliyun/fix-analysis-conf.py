@@ -6,7 +6,7 @@ FIXED = r"""# zhubo-analysis + control-center reverse proxy
 
 server {
     listen 80;
-    server_name 8.137.126.18 xiangyuzhubao.xyz www.xiangyuzhubao.xyz;
+    server_name 8.137.126.18;
 
     client_max_body_size 20m;
 

@@ -60,7 +60,11 @@ export function saveUserDesktopCommands(map: CommandMap) {
   fs.writeFileSync(userOverridesPath(), JSON.stringify(map, null, 2), 'utf8');
 }
 
-function lookupEntry(project: { id?: string; name?: string; code?: string }): DesktopCommandEntry | null {
+function lookupEntry(project: {
+  id?: string;
+  name?: string;
+  code?: string;
+}): DesktopCommandEntry | null {
   const map = getDesktopCommandMap();
   const keys = [project.code, project.name, project.id].filter(Boolean) as string[];
   for (const key of keys) {
@@ -127,8 +131,10 @@ export function resolveDesktopStartCommand(project: {
       try {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
         const scripts = pkg.scripts || {};
-        if (scripts.dev) return { command: wrapUtf8('npm run dev'), cwd: project.localPath, type: 'npm' };
-        if (scripts.start) return { command: wrapUtf8('npm run start'), cwd: project.localPath, type: 'npm' };
+        if (scripts.dev)
+          return { command: wrapUtf8('npm run dev'), cwd: project.localPath, type: 'npm' };
+        if (scripts.start)
+          return { command: wrapUtf8('npm run start'), cwd: project.localPath, type: 'npm' };
       } catch {
         /* ignore */
       }

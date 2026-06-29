@@ -24,7 +24,9 @@ export function OverviewPage() {
   };
 
   const featured = projects.filter((p) =>
-    ['辅助出库软件', '祥钰系统', '扫码枪登记出入库系统', '记账系统'].some((n) => p.name.includes(n)),
+    ['辅助出库软件', '祥钰系统', '扫码枪登记出入库系统', '记账系统'].some((n) =>
+      p.name.includes(n),
+    ),
   );
 
   return (

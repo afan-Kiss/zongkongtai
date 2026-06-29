@@ -14,6 +14,7 @@ import { CookiesPage } from '@/pages/CookiesPage';
 import { WindowsPage } from '@/pages/WindowsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AboutPage } from '@/pages/AboutPage';
+import { TooltipProvider } from '@/components/ui/Tooltip';
 import { CloudOfflineBanner } from '@/components/CloudOfflineBanner';
 
 const PAGES = {
@@ -46,33 +47,35 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <div className="flex min-h-0 flex-1">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar />
-          <CloudOfflineBanner />
-          <div className="flex min-h-0 flex-1">
-            <main className="min-w-0 flex-1 overflow-auto">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={page}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="h-full"
-                >
-                  <Page />
-                </motion.div>
-              </AnimatePresence>
-            </main>
-            {page !== 'terminal' && page !== 'settings' && <RightPanel />}
+    <TooltipProvider>
+      <div className="flex h-screen flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1">
+          <Sidebar />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <TopBar />
+            <CloudOfflineBanner />
+            <div className="flex min-h-0 flex-1">
+              <main className="min-w-0 flex-1 overflow-auto">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={page}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                    className="h-full"
+                  >
+                    <Page />
+                  </motion.div>
+                </AnimatePresence>
+              </main>
+              {page !== 'terminal' && page !== 'settings' && <RightPanel />}
+            </div>
+            {page !== 'terminal' && <TerminalPanel />}
           </div>
-          {page !== 'terminal' && <TerminalPanel />}
         </div>
+        <ToastStack />
       </div>
-      <ToastStack />
-    </div>
+    </TooltipProvider>
   );
 }

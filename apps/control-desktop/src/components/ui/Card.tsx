@@ -1,16 +1,26 @@
 import { cn } from '@/lib/utils';
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <div className={cn('glass rounded-lg shadow-card', className)}>{children}</div>
-  );
+  return <div className={cn('glass rounded-lg shadow-card', className)}>{children}</div>;
 }
 
-export function CardHeader({ className, children }: { className?: string; children: React.ReactNode }) {
+export function CardHeader({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return <div className={cn('p-4 pb-2', className)}>{children}</div>;
 }
 
-export function CardContent({ className, children }: { className?: string; children: React.ReactNode }) {
+export function CardContent({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return <div className={cn('p-4 pt-2', className)}>{children}</div>;
 }
 
@@ -31,7 +41,13 @@ export function Badge({
     muted: 'bg-muted text-muted-foreground border-border',
   };
   return (
-    <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-xs', styles[variant], className)}>
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs',
+        styles[variant],
+        className,
+      )}
+    >
       {children}
     </span>
   );
@@ -44,7 +60,7 @@ export function StatusDot({ status }: { status: string }) {
       : status === 'starting'
         ? 'bg-amber-400 animate-pulse'
         : status === 'error'
-          ? 'bg-red-400'
+          ? 'bg-red-400 animate-pulse-error shadow-[0_0_8px_rgba(248,113,113,0.5)]'
           : 'bg-muted-foreground/40';
   return <span className={cn('inline-block h-2.5 w-2.5 rounded-full', color)} />;
 }

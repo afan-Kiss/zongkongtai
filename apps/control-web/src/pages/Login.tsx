@@ -33,7 +33,9 @@ export default function LoginPage() {
           <label>密码</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        <button className="btn btn-primary" type="submit" style={{ width: '100%' }}>登录</button>
+        <button className="btn btn-primary" type="submit" style={{ width: '100%' }}>
+          登录
+        </button>
       </form>
     </div>
   );
