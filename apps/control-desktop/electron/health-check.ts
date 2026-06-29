@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import type { HealthCheckItem, HealthCheckReport } from '../../../packages/control-shared/src/steward';
+import type {
+  HealthCheckItem,
+  HealthCheckReport,
+} from '../../../packages/control-shared/src/steward';
 import { cloudClient } from './cloud-client';
 import { agentManager } from './agent-manager';
 import { inspectLegacy4791, closeLegacy4791 } from './port-4791';

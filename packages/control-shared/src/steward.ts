@@ -108,13 +108,17 @@ export interface WorkdaySummary {
 }
 
 export const DEFAULT_RISK_BY_CODE: Record<string, RiskLevel> = {
-  'churuku-helper': 'low',
-  'xiangyu-system': 'medium',
+  'zhubo-control': 'protected',
+  'zhubo-analysis': 'high',
+  'qianfan-relay': 'high',
+  'doudian-bot': 'high',
   'jade-scan': 'medium',
   'jade-accounting': 'medium',
-  'qianfan-relay': 'high',
-  'zhubo-analysis': 'high',
-  'zhubo-control': 'protected',
+  'xiangyu-system': 'medium',
+  'doudian-cdp': 'medium',
+  'doudian-gemini': 'medium',
+  'churuku-helper': 'low',
+  'doudian-chat-export': 'low',
 };
 
 export function normalizeRiskLevel(value?: string | null): RiskLevel {
