@@ -31,7 +31,7 @@ export function getScanRoot() {
 export function enrichProjectsWithManifests<T extends { code?: string; localPath?: string | null }>(
   projects: T[],
   basePath?: string,
-): Array<T & { manifestFavorite?: boolean; manifestGroup?: string }> {
+): Array<T & { manifestFavorite?: boolean; manifestGroup?: string; riskLevel?: string }> {
   const { manifests } = scanManifestsLocal(basePath);
   const byCode = new Map<string, ZhuboControlManifest>();
   for (const m of manifests) byCode.set(m.code, m);
@@ -43,6 +43,7 @@ export function enrichProjectsWithManifests<T extends { code?: string; localPath
       ...p,
       manifestFavorite: m?.control?.favorite,
       manifestGroup: m?.control?.group,
+      riskLevel: m?.riskLevel,
     };
   });
 }

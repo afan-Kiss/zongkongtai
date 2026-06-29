@@ -38,5 +38,6 @@
     "cookieMode": "control",
     "favorite": true,
     "notes": "本地 EXE + 云端 Cookie 中心"
-  }
+  },
+  "riskLevel": "protected"
 }

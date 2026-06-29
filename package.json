@@ -25,7 +25,8 @@
     "check": "npm run format:check && npm run build",
     "control:init-project": "node scripts/init-project.mjs",
     "control:acceptance-scan": "node scripts/acceptance-scan.mjs",
-    "control:acceptance-import": "node scripts/acceptance-import.mjs"
+    "control:acceptance-import": "node scripts/acceptance-import.mjs",
+    "control:acceptance-steward": "node scripts/acceptance-steward.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

@@ -12,6 +12,8 @@ export interface Project {
   code: string;
   category?: string;
   localPath?: string | null;
+  gitRemote?: string | null;
+  riskLevel?: 'low' | 'medium' | 'high' | 'protected';
   startCommand?: string | null;
   devCommand?: string | null;
   desktopStartCommand?: string | null;
@@ -36,6 +38,11 @@ export type NavPage =
   | 'overview'
   | 'workspace'
   | 'projects'
+  | 'git'
+  | 'health'
+  | 'backup'
+  | 'deploy'
+  | 'tasks'
   | 'terminal'
   | 'web'
   | 'ports'

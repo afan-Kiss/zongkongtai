@@ -167,6 +167,23 @@ export function PortsPage() {
           </tbody>
         </table>
       </div>
+
+      <div className="rounded-lg border border-border/60 bg-card/40 p-4">
+        <h2 className="mb-2 font-medium">端口预约（雏形）</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          为新系统推荐后端 / 前端端口，并检测是否与已登记端口冲突
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {[4720, 4725, 4730, 5173, 7890].map((port) => {
+            const used = rows.some((r) => r.port === port);
+            return (
+              <Badge key={port} variant={used ? 'destructive' : 'success'}>
+                {port} {used ? '已占用' : '可用'}
+              </Badge>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

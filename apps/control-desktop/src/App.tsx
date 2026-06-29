@@ -13,6 +13,11 @@ import { PortsPage } from '@/pages/PortsPage';
 import { CookiesPage } from '@/pages/CookiesPage';
 import { WindowsPage } from '@/pages/WindowsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { GitPage } from '@/pages/GitPage';
+import { HealthPage } from '@/pages/HealthPage';
+import { BackupPage } from '@/pages/BackupPage';
+import { DeployPage } from '@/pages/DeployPage';
+import { TasksPage } from '@/pages/TasksPage';
 import { AboutPage } from '@/pages/AboutPage';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { CloudOfflineBanner } from '@/components/CloudOfflineBanner';
@@ -21,6 +26,11 @@ const PAGES = {
   overview: OverviewPage,
   workspace: WorkspacePage,
   projects: ProjectsPage,
+  git: GitPage,
+  health: HealthPage,
+  backup: BackupPage,
+  deploy: DeployPage,
+  tasks: TasksPage,
   terminal: TerminalPage,
   web: WebPage,
   ports: PortsPage,

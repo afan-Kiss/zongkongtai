@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { RefreshCw, Sparkles, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, Badge } from '@/components/ui/Card';
 import { ProjectCard } from '@/components/ProjectCard';
@@ -12,12 +12,33 @@ export function OverviewPage() {
   const conflictCount = useAppStore((s) => s.conflictCount);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
   const pushToast = useAppStore((s) => s.pushToast);
+  const setPage = useAppStore((s) => s.setPage);
 
   const refresh = async () => {
     try {
       const conn = await window.zhuboDesktop.cloud.connect();
       if (!conn.ok) pushToast('error', conn.message);
       else pushToast('success', '已刷新');
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const workdayStart = async () => {
+    try {
+      const r = await window.zhuboDesktop.steward.workdayStart();
+      pushToast(r.ok ? 'success' : 'info', r.message);
+      setPage('health');
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const workdayEnd = async () => {
+    try {
+      const r = await window.zhuboDesktop.steward.workdayEnd();
+      pushToast(r.ok ? 'success' : 'info', r.message);
+      if (!r.ok && r.unpushed?.length) setPage('git');
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
     }
@@ -31,14 +52,22 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">总览</h1>
-          <p className="text-sm text-muted-foreground">本地现场指挥官 — 统一启动与管理</p>
+          <p className="text-sm text-muted-foreground">项目管家 — 开工体检 · 收工 Git 检查</p>
         </div>
-        <Button variant="secondary" onClick={refresh}>
-          <RefreshCw className="h-4 w-4" /> 刷新
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={workdayStart}>
+            <Sun className="h-4 w-4" /> 今日开工
+          </Button>
+          <Button variant="secondary" onClick={workdayEnd}>
+            <Moon className="h-4 w-4" /> 今日收工
+          </Button>
+          <Button variant="secondary" onClick={refresh}>
+            <RefreshCw className="h-4 w-4" /> 刷新
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
