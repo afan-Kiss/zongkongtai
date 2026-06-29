@@ -37,7 +37,7 @@ module.exports = {
         SERVICE_TOKEN: fileEnv.SERVICE_TOKEN,
         ADMIN_USERNAME: fileEnv.ADMIN_USERNAME,
         ADMIN_PASSWORD: fileEnv.ADMIN_PASSWORD,
-        DATABASE_URL: fileEnv.DATABASE_URL || 'file:./prisma/prod.db',
+        DATABASE_URL: fileEnv.DATABASE_URL || 'file:./prod.db',
       },
       max_memory_restart: '512M',
       error_file: '/www/wwwroot/zhubo-control-center/logs/pm2-error.log',

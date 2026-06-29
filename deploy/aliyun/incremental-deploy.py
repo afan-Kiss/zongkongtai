@@ -10,7 +10,7 @@ from pathlib import Path
 
 import paramiko
 
-from pack_filter import scan_tree
+from pack_filter import scan_tree, is_sensitive, _rel
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
@@ -51,21 +51,25 @@ def run(client: paramiko.SSHClient, cmd: str, timeout: int = 3600) -> int:
     out = stdout.read().decode("utf-8", errors="replace")
     err = stderr.read().decode("utf-8", errors="replace")
     code = stdout.channel.recv_exit_status()
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
     if out.strip():
-        print(out.rstrip())
+        print(out.rstrip().encode(enc, errors="replace").decode(enc, errors="replace"))
     if err.strip():
-        print(err.rstrip())
+        print(err.rstrip().encode(enc, errors="replace").decode(enc, errors="replace"))
     return code
 
 
 def build_zip(zip_path: Path) -> None:
-    include, excluded, sensitive_hits = scan_tree(ROOT)
-    if sensitive_hits:
-        print("ERROR: 发现不应上传的敏感文件:", file=sys.stderr)
-        for hit in sensitive_hits[:20]:
+    include, excluded, sensitive_excluded = scan_tree(ROOT)
+    leaks = [_rel(p, ROOT) for p in include if is_sensitive(_rel(p, ROOT))]
+    if leaks:
+        print("ERROR: 敏感文件将进入上传包:", file=sys.stderr)
+        for hit in leaks[:20]:
             print(f"  - {hit}", file=sys.stderr)
         sys.exit(1)
-    print(f"本次将上传 {len(include)} 个文件，已排除 {excluded} 个（含构建产物/敏感项）")
+    print(
+        f"本次将上传 {len(include)} 个文件，已排除 {excluded} 个（其中敏感 {sensitive_excluded} 个）"
+    )
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for path in include:
             rel = str(path.relative_to(ROOT))
@@ -114,16 +118,25 @@ set -e
 cd {DEPLOY_DIR}
 export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 if [ -s /root/.nvm/nvm.sh ]; then . /root/.nvm/nvm.sh; fi
-npm install
-npm run build
+npm install -w @zhubo/control-shared -w @zhubo/control-web -w @zhubo/control-server
 cd apps/control-server
 export DATABASE_URL="${{DATABASE_URL:-file:./prisma/prod.db}}"
 npx prisma generate
-npx prisma db push --accept-data-loss
 cd {DEPLOY_DIR}
-pm2 restart zhubo-control-center || pm2 start ecosystem.config.cjs
+npm run build -w @zhubo/control-shared
+npm run build -w @zhubo/control-web
+npm run build -w @zhubo/control-server
+cd apps/control-server
+if [ ! -s prisma/prod.db ]; then
+  npx prisma db push --accept-data-loss
+  set -a && . {DEPLOY_DIR}/.env && set +a
+  npx tsx prisma/seed.ts || true
+fi
+cd {DEPLOY_DIR}
+pm2 delete zhubo-control-center 2>/dev/null || true
+pm2 start ecosystem.config.cjs
 pm2 save
-sleep 2
+sleep 3
 curl -sf {PUBLIC_HEALTH}
 """,
         )

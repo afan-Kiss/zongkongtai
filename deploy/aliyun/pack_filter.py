@@ -1,4 +1,4 @@
-/** Shared deploy zip filtering — excludes sensitive/build artifacts. */
+"""Shared deploy zip filtering — excludes sensitive/build artifacts."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -92,10 +92,10 @@ def should_skip(rel: str) -> bool:
     return False
 
 
-def scan_tree(root: Path) -> tuple[list[Path], int, list[str]]:
+def scan_tree(root: Path) -> tuple[list[Path], int, int]:
     include: list[Path] = []
     excluded = 0
-    sensitive_hits: list[str] = []
+    sensitive_excluded = 0
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -103,7 +103,11 @@ def scan_tree(root: Path) -> tuple[list[Path], int, list[str]]:
         if should_skip(rel):
             excluded += 1
             if is_sensitive(rel):
-                sensitive_hits.append(rel)
+                sensitive_excluded += 1
+            continue
+        if is_sensitive(rel):
+            excluded += 1
+            sensitive_excluded += 1
             continue
         include.append(path)
-    return include, excluded, sensitive_hits
+    return include, excluded, sensitive_excluded
