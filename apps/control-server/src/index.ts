@@ -1,8 +1,10 @@
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { createApp } from './app';
-import { config } from './config';
+import { config, validateProductionConfig } from './config';
 import { agentHub } from './services/agentHub';
+
+validateProductionConfig();
 
 const app = createApp();
 const server = http.createServer(app);

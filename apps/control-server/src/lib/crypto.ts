@@ -8,6 +8,12 @@ function getKey(): Buffer {
   if (config.encryptionKey) {
     const buf = Buffer.from(config.encryptionKey, 'base64');
     if (buf.length === 32) return buf;
+    if (config.isProduction) {
+      throw new Error('SECRET_ENCRYPTION_KEY 无效：必须是 32 字节的 base64。Cookie 无法稳定解密。');
+    }
+  }
+  if (config.isProduction) {
+    throw new Error('生产环境缺少 SECRET_ENCRYPTION_KEY，总控台拒绝处理 Cookie 加解密。');
   }
   return crypto.createHash('sha256').update(config.sessionSecret).digest();
 }

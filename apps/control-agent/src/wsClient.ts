@@ -88,9 +88,14 @@ export function startAgent() {
 
 async function registerAgentHttp() {
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (agentConfig.serviceToken) {
+      headers.Authorization = `Bearer ${agentConfig.serviceToken}`;
+      headers['x-service-token'] = agentConfig.serviceToken;
+    }
     await fetch(`${agentConfig.serverUrl}/api/agents/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         name: agentConfig.name,
         token: agentConfig.token,

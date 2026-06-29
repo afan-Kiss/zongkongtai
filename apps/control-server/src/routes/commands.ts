@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, getActor, getClientIp } from '../middleware/auth';
 import { writeOperationLog } from '../services/operationLog';
 import { paramId } from '../lib/params';
+import { parseCommandInput, parseCommandUpdate, formatZodError } from '../lib/validateInput';
 
 const router = Router();
 
@@ -15,7 +16,13 @@ router.get('/', requireAuth, async (_req, res) => {
 });
 
 router.post('/', requireAuth, async (req, res) => {
-  const command = await prisma.commandProfile.create({ data: req.body });
+  let data;
+  try {
+    data = parseCommandInput(req.body);
+  } catch (e) {
+    return res.status(400).json({ error: formatZodError(e) });
+  }
+  const command = await prisma.commandProfile.create({ data });
   await writeOperationLog({
     actor: getActor(req),
     action: 'create_command',
@@ -27,9 +34,15 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, async (req, res) => {
+  let data;
+  try {
+    data = parseCommandUpdate(req.body);
+  } catch (e) {
+    return res.status(400).json({ error: formatZodError(e) });
+  }
   const command = await prisma.commandProfile.update({
     where: { id: paramId(req) },
-    data: req.body,
+    data,
   });
   res.json(command);
 });

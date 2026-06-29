@@ -56,6 +56,8 @@ function buildAgentEnv() {
     ...process.env,
     CONTROL_SERVER_URL: serverUrl,
     AGENT_TOKEN: cfg.agentToken || process.env.AGENT_TOKEN || '',
+    SERVICE_TOKEN: cfg.serviceToken || process.env.SERVICE_TOKEN || '',
+    CONTROL_SERVICE_TOKEN: cfg.serviceToken || process.env.SERVICE_TOKEN || '',
     AGENT_NAME: process.env.AGENT_NAME || 'Windows本地Agent',
     SCAN_ROOT: cfg.scanRoot || 'E:\\我的软件源码',
     FORCE_COLOR: '0',
@@ -189,8 +191,9 @@ export class AgentManager extends EventEmitter {
     const root = resolveMonorepoRoot();
     if (!root) {
       this.state = 'start_failed';
-      this.message = '找不到总控台源码目录，无法启动 Agent';
-      appendAgentLog('resolveMonorepoRoot failed');
+      this.message =
+        '找不到总控台源码目录。当前 Agent 依赖本机源码树；复制绿色包到其他电脑前需内置 Agent，或在设置里把扫描根目录指到含 apps/control-agent 的 monorepo。';
+      appendAgentLog('resolveMonorepoRoot failed — need apps/control-agent in scanRoot/总控台');
       return this.getSnapshot();
     }
 

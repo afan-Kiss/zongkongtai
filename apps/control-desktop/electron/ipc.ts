@@ -38,6 +38,14 @@ import { isAutoLaunchEnabled, setAutoLaunch } from './auto-launch';
 import { fileLog } from './file-logger';
 
 import { agentManager } from './agent-manager';
+import {
+  assertAllowedExternalUrl,
+  assertAllowedOpenPath,
+  assertMoveWindowOptions,
+  assertTerminalSession,
+  getWindowHwnd,
+  pickSafeProjectPayload,
+} from './ipc-security';
 
 const webViews = new Map<string, BrowserWindow>();
 
@@ -232,19 +240,14 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcMain.handle('process:start', async (_e, project: any) => {
-    let payload = project;
-
-    if (project?.id) {
-      try {
-        const detail = await cloudClient.project(project.id);
-
-        payload = { ...detail, ...project };
-      } catch {
-        fileLog.process(`无法拉取项目详情 ${project.id}，使用列表数据`, 'warn');
-      }
+    if (!project?.id) throw new Error('缺少项目 ID，无法启动');
+    try {
+      const detail = await cloudClient.project(project.id);
+      return processManager.start(pickSafeProjectPayload(detail as Record<string, unknown>));
+    } catch (e) {
+      fileLog.process(`启动失败: ${e instanceof Error ? e.message : String(e)}`, 'error');
+      throw e;
     }
-
-    return processManager.start(payload);
   });
 
   ipcMain.handle('process:stop', async (_e, projectId: string) => {
@@ -254,19 +257,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcMain.handle('process:restart', async (_e, project: any) => {
-    let payload = project;
-
-    if (project?.id) {
-      try {
-        const detail = await cloudClient.project(project.id);
-
-        payload = { ...detail, ...project };
-      } catch {
-        /* ignore */
-      }
+    if (!project?.id) throw new Error('缺少项目 ID，无法重启');
+    try {
+      const detail = await cloudClient.project(project.id);
+      return processManager.restart(pickSafeProjectPayload(detail as Record<string, unknown>));
+    } catch (e) {
+      throw e;
     }
-
-    return processManager.restart(payload);
   });
 
   ipcMain.handle('process:usage', async (_e, projectId: string) =>
@@ -274,6 +271,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   );
 
   ipcMain.handle('terminal:write', (_e, projectId: string, data: string) => {
+    assertTerminalSession(projectId);
     processManager.write(projectId, data);
   });
 
@@ -285,9 +283,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('ports:check', (_e, port: number) => isPortListening(port));
 
-  ipcMain.handle('shell:openPath', (_e, p: string) => shell.openPath(p));
+  ipcMain.handle('shell:openPath', (_e, p: string) => {
+    return shell.openPath(assertAllowedOpenPath(p));
+  });
 
-  ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url));
+  ipcMain.handle('shell:openExternal', (_e, url: string) => {
+    return shell.openExternal(assertAllowedExternalUrl(url));
+  });
 
   ipcMain.handle('native:status', () => getHelperStatus());
 
@@ -303,15 +305,16 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('native:findByProcess', (_e, name: string) => findWindowsByProcess(name));
 
-  ipcMain.handle('native:moveWindow', (_e, opts: any) => moveWindow(opts));
+  ipcMain.handle('native:moveWindow', (_e, opts: any) => {
+    assertMoveWindowOptions(opts);
+    return moveWindow(opts);
+  });
 
-  ipcMain.handle('native:focusWindow', (_e, hwnd: number) => focusWindow(hwnd));
+  ipcMain.handle('native:focusWindow', (_e, hwnd: number | string) => focusWindow(hwnd));
 
   ipcMain.handle('native:arrangeQianfan', async () => {
     const win = getMainWindow();
-
-    const hwnd = win ? win.getNativeWindowHandle().readInt32LE(0) : undefined;
-
+    const hwnd = getWindowHwnd(win);
     const result = await arrangeQianfanWorkspace(hwnd);
 
     fileLog.native(result.messages.join('; '));
@@ -327,8 +330,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     const projects = await cloudClient.projects();
 
     const win = getMainWindow();
-
-    const hwnd = win ? win.getNativeWindowHandle().readInt32LE(0) : undefined;
+    const hwnd = getWindowHwnd(win);
 
     const steps: any[] = [];
 
@@ -342,12 +344,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcMain.handle('webview:open', (_e, { id, url }: { id: string; url: string }) => {
+    const safeUrl = assertAllowedExternalUrl(url);
     const existing = webViews.get(id);
 
     if (existing && !existing.isDestroyed()) {
       existing.focus();
 
-      existing.loadURL(url);
+      existing.loadURL(safeUrl);
 
       return { ok: true, reused: true };
     }
@@ -384,7 +387,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
     child.on('closed', () => webViews.delete(id));
 
-    child.loadURL(url);
+    child.loadURL(safeUrl);
 
     webViews.set(id, child);
 
@@ -425,7 +428,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('cloud:openSecretsPage', () => {
     const base = loadConfig().controlServerUrl.replace(/\/$/, '');
-    return shell.openExternal(`${base}/secrets`);
+    return shell.openExternal(assertAllowedExternalUrl(`${base}/secrets`));
   });
 
   ipcMain.handle('ports:inspect4791', () => inspectLegacy4791());

@@ -1,9 +1,9 @@
 import express from 'express';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
-import cors from 'cors';
 import path from 'path';
 import { config } from './config';
+import { corsMiddleware } from './middleware/cors';
 import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
 import portRoutes from './routes/ports';
@@ -16,7 +16,15 @@ export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
 
-  app.use(cors({ origin: true, credentials: true }));
+  app.use(corsMiddleware);
+
+  app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err?.message?.includes('CORS')) {
+      console.warn(`[CORS] ${req.method} ${req.path} — ${err.message}`);
+      return res.status(403).json({ error: err.message });
+    }
+    next(err);
+  });
   app.use(express.json({ limit: '10mb' }));
   app.use(cookieParser());
   app.use(

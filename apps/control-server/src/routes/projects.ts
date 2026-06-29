@@ -4,6 +4,7 @@ import { requireAuth, getActor, getClientIp } from '../middleware/auth';
 import { writeOperationLog } from '../services/operationLog';
 import { agentHub } from '../services/agentHub';
 import { paramId } from '../lib/params';
+import { parseProjectCreate, parseProjectUpdate, formatZodError } from '../lib/validateInput';
 
 const router = Router();
 
@@ -18,7 +19,12 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 router.post('/', requireAuth, async (req, res) => {
-  const data = req.body;
+  let data;
+  try {
+    data = parseProjectCreate(req.body);
+  } catch (e) {
+    return res.status(400).json({ error: formatZodError(e) });
+  }
   const project = await prisma.project.create({ data });
   await writeOperationLog({
     actor: getActor(req),
@@ -45,7 +51,13 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, async (req, res) => {
-  const project = await prisma.project.update({ where: { id: paramId(req) }, data: req.body });
+  let data;
+  try {
+    data = parseProjectUpdate(req.body);
+  } catch (e) {
+    return res.status(400).json({ error: formatZodError(e) });
+  }
+  const project = await prisma.project.update({ where: { id: paramId(req) }, data });
   await writeOperationLog({
     actor: getActor(req),
     action: 'update_project',

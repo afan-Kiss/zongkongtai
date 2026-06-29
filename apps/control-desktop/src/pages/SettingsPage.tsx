@@ -97,6 +97,11 @@ export function SettingsPage() {
           <div className="font-medium">本地 Agent</div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-100">
+            当前 Agent 依赖本机源码树（扫描根目录下的
+            总控台/apps/control-agent）。复制绿色包到其他电脑前需要内置
+            Agent，否则只能手动在本机有源码的环境运行。
+          </p>
           <p className="text-xs text-muted-foreground">
             连接地址：
             <span className="font-mono text-foreground">

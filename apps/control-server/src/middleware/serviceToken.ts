@@ -8,8 +8,10 @@ export function extractServiceToken(req: Request): string {
   if (typeof auth === 'string' && auth.toLowerCase().startsWith('bearer ')) {
     return auth.slice(7).trim();
   }
-  const queryToken = req.query.serviceToken;
-  if (typeof queryToken === 'string' && queryToken.trim()) return queryToken.trim();
+  if (!config.isProduction) {
+    const queryToken = req.query.serviceToken;
+    if (typeof queryToken === 'string' && queryToken.trim()) return queryToken.trim();
+  }
   return '';
 }
 
@@ -22,4 +24,13 @@ export function requireServiceToken(req: Request, res: Response, next: NextFunct
     return res.status(403).json({ error: '服务令牌无效' });
   }
   next();
+}
+
+export async function requireServiceTokenOrAuth(req: Request, res: Response, next: NextFunction) {
+  const token = extractServiceToken(req);
+  if (config.serviceToken && token === config.serviceToken) {
+    return next();
+  }
+  const { requireAuth } = await import('./auth');
+  return requireAuth(req, res, next);
 }

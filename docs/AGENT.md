@@ -12,6 +12,12 @@ WebSocket：`ws://8.137.126.18/control/api/agent/ws`
 
 不要使用 4790、4791、域名或 wss。
 
+## HTTP 注册
+
+`POST /api/agents/register` 需要 **Service Token**（推荐 `Authorization: Bearer <SERVICE_TOKEN>`）或管理员登录 Session。
+
+Agent 进程会从环境变量 `SERVICE_TOKEN` 携带 Bearer 头；WebSocket 仍使用 `AGENT_TOKEN` 连接 `/api/agent/ws`。
+
 ## 手动启动
 
 ```bash

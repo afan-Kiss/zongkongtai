@@ -1,7 +1,10 @@
 node_modules
+**/node_modules
 dist
+**/dist
 dist-electron
 dist-desktop
+win-unpacked
 build
 coverage
 .turbo
@@ -14,3 +17,8 @@ apps/control-desktop/native-helper/**/obj
 apps/control-desktop/native-helper/publish
 deploy-output-credentials.txt
 deploy-output.txt
+deploy-output-web.zip
+scripts/*report*.json
+scripts/qianfan-cookie-audit.json
+*.log
+*.zip

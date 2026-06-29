@@ -12,6 +12,9 @@ from pathlib import Path
 
 import paramiko
 
+from pack_filter import scan_tree
+
+
 ROOT = Path(__file__).resolve().parents[2]
 HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
 USER = os.environ.get("DEPLOY_USER", "root")
@@ -54,29 +57,19 @@ def run(client: paramiko.SSHClient, cmd: str, timeout: int = 3600) -> tuple[int,
     return code, out, err
 
 
-def should_skip(rel: str) -> bool:
-    parts = rel.replace("\\", "/").split("/")
-    if parts[0] in SKIP_DIRS:
-        return True
-    for p in parts:
-        if p in SKIP_DIRS:
-            return True
-    rel_l = rel.replace("\\", "/").lower()
-    return any(x in rel_l for x in SKIP_PARTS)
-
-
 def build_zip(zip_path: Path) -> None:
-    count = 0
+    include, excluded, sensitive_hits = scan_tree(ROOT)
+    if sensitive_hits:
+        print("ERROR: 发现不应上传的敏感文件:", file=sys.stderr)
+        for hit in sensitive_hits[:20]:
+            print(f"  - {hit}", file=sys.stderr)
+        sys.exit(1)
+    print(f"本次将上传 {len(include)} 个文件，已排除 {excluded} 个（含构建产物/敏感项）")
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for path in ROOT.rglob("*"):
-            if not path.is_file():
-                continue
+        for path in include:
             rel = str(path.relative_to(ROOT))
-            if should_skip(rel):
-                continue
             zf.write(path, rel)
-            count += 1
-    print(f"Packed {count} files")
+    print(f"Packed {len(include)} files")
 
 
 def parse_env(text: str) -> dict[str, str]:

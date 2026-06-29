@@ -11,7 +11,14 @@
 
 ## 上传
 
-千帆中转机器人 → `POST /api/secrets/qianfan/upload-cookie`（Service Token）
+千帆中转机器人 → `POST /api/secrets/qianfan/upload-cookie`
+
+**鉴权（生产环境）**：仅允许
+
+- `Authorization: Bearer <SERVICE_TOKEN>`
+- `x-service-token: <SERVICE_TOKEN>`
+
+不要使用 URL query `?serviceToken=`（生产环境已禁用，避免 token 写入 Nginx access log）。
 
 云端：`http://8.137.126.18/control`
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth, getActor, getClientIp } from '../middleware/auth';
+import { requireServiceTokenOrAuth } from '../middleware/serviceToken';
 import { hashToken } from '../lib/crypto';
 import { agentHub } from '../services/agentHub';
 import { writeOperationLog } from '../services/operationLog';
@@ -19,7 +20,7 @@ router.get('/', requireAuth, async (_req, res) => {
   );
 });
 
-router.post('/register', async (req, res) => {
+router.post('/register', requireServiceTokenOrAuth, async (req, res) => {
   const { name, token, machineName, os, basePath, notes } = req.body;
   if (!name || !token) return res.status(400).json({ error: 'name 和 token 必填' });
 

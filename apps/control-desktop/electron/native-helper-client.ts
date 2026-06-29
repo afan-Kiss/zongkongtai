@@ -5,7 +5,7 @@ import { app } from 'electron';
 import { fileLog } from './file-logger';
 
 export interface WindowInfo {
-  hwnd: number;
+  hwnd: number | string;
   title: string;
   processName: string;
   pid: number;
@@ -64,7 +64,7 @@ export async function findWindowsByProcess(processName: string): Promise<WindowI
 }
 
 export async function moveWindow(opts: {
-  hwnd?: number;
+  hwnd?: number | string;
   pid?: number;
   title?: string;
   x: number;
@@ -89,15 +89,15 @@ export async function moveWindow(opts: {
   return runHelper(args);
 }
 
-export async function focusWindow(hwnd: number) {
+export async function focusWindow(hwnd: number | string) {
   return runHelper(['focus-window', '--hwnd', String(hwnd)]);
 }
 
-export async function setAlwaysOnTop(hwnd: number, onTop: boolean) {
+export async function setAlwaysOnTop(hwnd: number | string, onTop: boolean) {
   return runHelper(['set-top', '--hwnd', String(hwnd), '--value', onTop ? '1' : '0']);
 }
 
-export async function arrangeQianfanWorkspace(mainHwnd?: number) {
+export async function arrangeQianfanWorkspace(mainHwnd?: number | string) {
   const { screen } = await import('electron');
   const display = screen.getPrimaryDisplay();
   const { x: areaX, y: areaY, width, height } = display.workArea;

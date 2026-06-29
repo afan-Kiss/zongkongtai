@@ -151,6 +151,10 @@ export class ProcessManager extends EventEmitter {
     return this.processes.get(projectId);
   }
 
+  hasTerminal(projectId: string) {
+    return this.terminals.has(projectId);
+  }
+
   getLogs(projectId: string, tail = MAX_LOG_LINES) {
     const lines = this.logs.get(projectId) || [];
     return lines.slice(-tail).join('\n');
