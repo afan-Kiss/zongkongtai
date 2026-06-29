@@ -4,6 +4,7 @@ import { requireAuth, getActor, getClientIp } from '../middleware/auth';
 import { requireAgentOrAuth } from '../middleware/agentToken';
 import { agentHub } from '../services/agentHub';
 import { importScanResults } from '../services/portConflict';
+import { normalizeScanPayload } from '@zhubo/control-shared';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.post('/import', requireAgentOrAuth, async (req, res) => {
     body.agentId = (req as { agentId?: string }).agentId;
   }
   try {
-    const stats = await importScanResults(body);
+    const stats = await importScanResults(normalizeScanPayload(body));
     res.json({ ok: true, stats });
   } catch (e) {
     console.error('[ports/import]', e);

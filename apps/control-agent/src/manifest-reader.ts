@@ -5,6 +5,8 @@ import {
   readManifestJson,
   manifestToScanFields,
   scanManifestsUnderRoot,
+  asArray,
+  normalizeScanFields,
   type ZhuboControlManifest,
 } from '@zhubo/control-shared';
 
@@ -27,9 +29,9 @@ export function applyManifestToScan(
   const manifest = readProjectManifest(projectDir);
   if (!manifest) return scan;
 
-  const fields = manifestToScanFields(manifest, projectDir);
-  const portKeys = new Set(scan.ports.map((p) => p.port));
-  const mergedPorts = [...scan.ports];
+  const fields = normalizeScanFields(manifestToScanFields(manifest, projectDir));
+  const portKeys = new Set(asArray(scan.ports).map((p) => p.port));
+  const mergedPorts = [...asArray(scan.ports)];
   for (const p of fields.ports) {
     if (!portKeys.has(p.port)) mergedPorts.push(p);
   }
@@ -57,7 +59,9 @@ export function applyManifestToScan(
     status: fields.status,
     gitRemote: manifest.gitRemote || scan.gitRemote,
     ports: mergedPorts,
-    commands: fields.commands.length ? [...scan.commands, ...fields.commands] : scan.commands,
+    commands: fields.commands.length
+      ? [...asArray(scan.commands), ...fields.commands]
+      : asArray(scan.commands),
     notes: [scan.notes, fields.notes, manifest.gitRemote ? `Git: ${manifest.gitRemote}` : '']
       .filter(Boolean)
       .join('\n'),

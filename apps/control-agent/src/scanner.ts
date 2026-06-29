@@ -13,6 +13,7 @@ import {
   ScanPortResult,
   ScanCommandResult,
   CommandType,
+  asArray,
 } from '@zhubo/control-shared';
 import { PRIORITY_PORTS } from '@zhubo/control-shared';
 import { applyManifestToScan } from './manifest-reader';
@@ -299,11 +300,11 @@ export function scanRoot(basePath: string, agentId: string): AgentScanPayload {
   }
 
   const runtimePorts = getRuntimePorts();
-  const configuredPorts = new Set(projects.flatMap((p) => p.ports.map((x) => x.port)));
+  const configuredPorts = new Set(projects.flatMap((p) => asArray(p.ports).map((x) => x.port)));
   const unknownPorts = runtimePorts.filter((r) => !configuredPorts.has(r.port));
 
   for (const p of projects) {
-    for (const port of p.ports) {
+    for (const port of asArray(p.ports)) {
       if (runtimePorts.some((r) => r.port === port.port)) {
         port.isRuntimeDetected = true;
       }

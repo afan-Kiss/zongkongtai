@@ -1,5 +1,5 @@
 import type { ZhuboControlManifest } from '@zhubo/control-shared';
-import { manifestToScanFields, validateManifest } from '@zhubo/control-shared';
+import { manifestToScanFields, normalizeScanFields, validateManifest } from '@zhubo/control-shared';
 import { prisma, withDbRetry } from '../lib/prisma';
 import { writeOperationLog } from './operationLog';
 
@@ -40,7 +40,7 @@ export async function importManifests(
       continue;
     }
 
-    const fields = manifestToScanFields(m, m.localPath || '');
+    const fields = normalizeScanFields(manifestToScanFields(m, m.localPath || ''));
     const existing = await withDbRetry(() =>
       prisma.project.findUnique({ where: { code: m.code } }),
     );

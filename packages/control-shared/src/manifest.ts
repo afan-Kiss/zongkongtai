@@ -1,5 +1,6 @@
 export const MANIFEST_FILENAME = 'zhubo-control.manifest.json';
 
+import { asArray } from './arrays';
 import { parsePortFromUrl } from './manifestValidate';
 
 export type ManifestHealthType = 'http' | 'process' | 'missing';
@@ -195,7 +196,7 @@ export function manifestToScanFields(m: ZhuboControlManifest, projectDir: string
         ? `[manifest:service] ${servicePorts.get(port)} :${port}`
         : `[manifest] ${m.name} :${port}`,
     })),
-    commands: (m.services || []).map((s) => ({
+    commands: asArray<ManifestServiceEntry>(m.services).map((s) => ({
       name: s.name,
       command: s.command,
       cwd: m.localPath || projectDir,

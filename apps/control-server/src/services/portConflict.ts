@@ -1,6 +1,7 @@
 import { prisma, withDbRetry } from '../lib/prisma';
 import { inferPortRole, isListenerRole, isListenerSourceType, normalizeHost } from './portRole';
 import { archiveStaleProjects } from './projectArchive';
+import { normalizeScanPayload } from '@zhubo/control-shared';
 
 const PRESERVED_SOURCE_TYPES = new Set(['manual', 'nginx']);
 
@@ -156,8 +157,9 @@ export async function recomputePortConflicts() {
 }
 
 export async function importScanResults(
-  payload: import('@zhubo/control-shared').AgentScanPayload,
+  rawPayload: import('@zhubo/control-shared').AgentScanPayload,
 ): Promise<ImportScanStats> {
+  const payload = normalizeScanPayload(rawPayload);
   const scannedAt = new Date(payload.scannedAt);
   const scannedCodes = new Set(payload.projects.map((p) => p.code));
   const scannedNames = new Set(payload.projects.map((p) => p.name));
@@ -280,7 +282,7 @@ export async function importScanResults(
         portCount++;
       }
 
-      for (const cmd of sp.commands ?? []) {
+      for (const cmd of sp.commands) {
         const existing = await prisma.commandProfile.findFirst({
           where: { projectId: project.id, name: cmd.name, command: cmd.command },
         });

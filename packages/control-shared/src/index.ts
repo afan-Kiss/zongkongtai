@@ -1,6 +1,7 @@
 export * from './constants';
 export * from './portUtils';
 export * from './types';
+export * from './arrays';
 export * from './manifest';
 export {
   MANIFEST_FILENAME,
@@ -12,6 +13,7 @@ export {
   parsePortFromUrl,
   collectManifestPorts,
 } from './manifest';
+export { asArray, normalizeScanPayload, normalizeScanProject, normalizeScanFields } from './arrays';
 export type {
   ZhuboControlManifest,
   ManifestServiceEntry,

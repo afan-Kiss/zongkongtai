@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { AgentScanPayload, ServerAgentMessage } from '@zhubo/control-shared';
+import { AgentScanPayload, ServerAgentMessage, normalizeScanPayload } from '@zhubo/control-shared';
 import { prisma } from '../lib/prisma';
 import { hashToken } from '../lib/crypto';
 import { importScanResults } from './portConflict';
@@ -55,10 +55,10 @@ class AgentHub {
         }
         if (msg.type === 'scan_result') {
           const started = Date.now();
-          const payload = msg.payload as AgentScanPayload;
+          const payload = normalizeScanPayload(msg.payload as AgentScanPayload);
           const durationMs = payload?.scanDurationMs ?? 0;
-          const projectCount = payload?.projects?.length ?? 0;
-          const portCount = payload?.projects?.reduce((n, p) => n + (p.ports?.length || 0), 0) ?? 0;
+          const projectCount = payload.projects.length;
+          const portCount = payload.projects.reduce((n, p) => n + p.ports.length, 0);
 
           try {
             const stats = await importScanResults(payload);
