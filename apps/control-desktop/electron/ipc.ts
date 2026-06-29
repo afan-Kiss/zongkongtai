@@ -39,7 +39,7 @@ import { fileLog } from './file-logger';
 
 import { agentManager } from './agent-manager';
 import {
-  scanManifestsUnderRoot,
+  scanManifestsLocal,
   getScanRoot,
   enrichProjectsWithManifests,
   runAgentScanCli,
@@ -464,20 +464,22 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('manifest:scanLocal', () => {
     const root = getScanRoot();
-    return { root, manifests: scanManifestsUnderRoot(root) };
+    const { manifests, warnings } = scanManifestsLocal(root);
+    return { root, manifests, warnings };
   });
 
   ipcMain.handle('manifest:import', async () => {
     await cloudClient.ensureLogin();
-    const manifests = scanManifestsUnderRoot(getScanRoot());
+    const { manifests, warnings } = scanManifestsLocal(getScanRoot());
     if (!manifests.length) {
-      return { ok: false, message: '未找到任何 zhubo-control.manifest.json' };
+      return { ok: false, message: '未找到任何 zhubo-control.manifest.json', warnings };
     }
     const result = await cloudClient.importManifests(manifests);
     fileLog.app(`manifest 导入: +${result.imported} 更新 ${result.updated}`);
     return {
       ok: true,
       ...result,
+      warnings: [...warnings, ...(result.warnings || [])],
       message: `导入 ${result.imported} 个，更新 ${result.updated} 个`,
     };
   });

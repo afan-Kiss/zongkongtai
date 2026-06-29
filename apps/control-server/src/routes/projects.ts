@@ -39,6 +39,21 @@ router.post('/', requireAuth, async (req, res) => {
   res.json(project);
 });
 
+router.post('/import-manifests', requireAuth, async (req, res) => {
+  const raw = req.body?.manifests;
+  if (!Array.isArray(raw)) {
+    return res.status(400).json({ error: 'manifests 必须是数组' });
+  }
+  const manifests = raw.map((item) => readManifestJson(item)).filter(Boolean) as NonNullable<
+    ReturnType<typeof readManifestJson>
+  >[];
+  if (!manifests.length) {
+    return res.status(400).json({ error: '没有有效的 manifest 条目' });
+  }
+  const result = await importManifests(manifests, getActor(req), getClientIp(req));
+  res.json({ ok: true, ...result });
+});
+
 router.get('/:id', requireAuth, async (req, res) => {
   const project = await prisma.project.findUnique({
     where: { id: paramId(req) },
@@ -188,21 +203,6 @@ router.post('/:id/health-check', requireAuth, async (req, res) => {
     await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } });
     res.json(result);
   }
-});
-
-router.post('/import-manifests', requireAuth, async (req, res) => {
-  const raw = req.body?.manifests;
-  if (!Array.isArray(raw)) {
-    return res.status(400).json({ error: 'manifests 必须是数组' });
-  }
-  const manifests = raw.map((item) => readManifestJson(item)).filter(Boolean) as NonNullable<
-    ReturnType<typeof readManifestJson>
-  >[];
-  if (!manifests.length) {
-    return res.status(400).json({ error: '没有有效的 manifest 条目' });
-  }
-  const result = await importManifests(manifests, getActor(req), getClientIp(req));
-  res.json({ ok: true, ...result });
 });
 
 export default router;

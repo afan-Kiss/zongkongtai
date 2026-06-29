@@ -202,6 +202,11 @@ function buildManifest(opts) {
   if (FORBIDDEN.test(JSON.stringify(manifest))) {
     throw new Error('manifest 含禁止域名，请改用 127.0.0.1 或 8.137.126.18');
   }
+  const portSet = new Set(manifest.ports || []);
+  for (const s of manifest.services || []) {
+    if (s.port) portSet.add(s.port);
+  }
+  manifest.ports = [...portSet].sort((a, b) => a - b);
   return manifest;
 }
 

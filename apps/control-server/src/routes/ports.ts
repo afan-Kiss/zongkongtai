@@ -43,8 +43,13 @@ router.post('/import', requireAgentOrAuth, async (req, res) => {
   if ((req as { agentId?: string }).agentId) {
     body.agentId = (req as { agentId?: string }).agentId;
   }
-  const stats = await importScanResults(body);
-  res.json({ ok: true, stats });
+  try {
+    const stats = await importScanResults(body);
+    res.json({ ok: true, stats });
+  } catch (e) {
+    console.error('[ports/import]', e);
+    res.status(500).json({ error: e instanceof Error ? e.message : '扫描入库失败' });
+  }
 });
 
 export default router;

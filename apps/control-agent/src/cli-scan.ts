@@ -16,9 +16,12 @@ async function main() {
     ),
   );
 
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (agentConfig.token) headers['x-agent-token'] = agentConfig.token;
+
   const res = await fetch(`${agentConfig.serverUrl}/api/ports/import`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   });
   console.log('Upload status', res.status, await res.text());

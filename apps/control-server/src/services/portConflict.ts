@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import { prisma, withDbRetry } from '../lib/prisma';
 import { inferPortRole, isListenerRole, isListenerSourceType, normalizeHost } from './portRole';
 import { archiveStaleProjects } from './projectArchive';
 
@@ -164,128 +164,140 @@ export async function importScanResults(
   let portCount = 0;
 
   for (const sp of payload.projects) {
-    const existing = await prisma.project.findUnique({ where: { code: sp.code } });
+    await withDbRetry(async () => {
+      const existing = await prisma.project.findUnique({ where: { code: sp.code } });
 
-    const project = await prisma.project.upsert({
-      where: { code: sp.code },
-      update: {
-        name: sp.name,
-        localPath: sp.localPath,
-        category: sp.category,
-        locationType: sp.locationType || existing?.locationType || 'local',
-        packageManager: sp.packageManager || existing?.packageManager || 'unknown',
-        startCommand: existing?.startCommand || sp.startCommand,
-        devCommand: sp.devCommand ?? existing?.devCommand,
-        buildCommand: sp.buildCommand ?? existing?.buildCommand,
-        deployCommand: existing?.deployCommand,
-        desktopStartCommand: sp.desktopStartCommand ?? existing?.desktopStartCommand,
-        pm2Name: sp.pm2Name ?? existing?.pm2Name,
-        healthUrl: sp.localHealthUrl || sp.healthUrl || existing?.healthUrl,
-        localWebUrl: sp.localWebUrl ?? existing?.localWebUrl,
-        localHealthUrl: sp.localHealthUrl ?? existing?.localHealthUrl,
-        publicUrl: sp.publicUrl ?? existing?.publicUrl,
-        gitRemote: sp.gitRemote ?? existing?.gitRemote,
-        lastScannedAt: scannedAt,
-        notes: sp.notes ?? existing?.notes,
-      },
-      create: {
-        name: sp.name,
-        code: sp.code,
-        localPath: sp.localPath,
-        category: sp.category,
-        locationType: sp.locationType || 'local',
-        packageManager: sp.packageManager || 'unknown',
-        startCommand: sp.startCommand,
-        devCommand: sp.devCommand,
-        buildCommand: sp.buildCommand,
-        desktopStartCommand: sp.desktopStartCommand,
-        pm2Name: sp.pm2Name,
-        healthUrl: sp.localHealthUrl || sp.healthUrl,
-        localWebUrl: sp.localWebUrl,
-        localHealthUrl: sp.localHealthUrl,
-        publicUrl: sp.publicUrl,
-        gitRemote: sp.gitRemote,
-        lastScannedAt: scannedAt,
-        notes: sp.notes,
-        archived: false,
-      },
-    });
-
-    await prisma.portUsage.deleteMany({
-      where: {
-        projectId: project.id,
-        isRuntimeDetected: false,
-        sourceType: { notIn: [...PRESERVED_SOURCE_TYPES] },
-      },
-    });
-
-    const seenKeys = new Set<string>();
-    for (const port of sp.ports) {
-      const role = inferPortRole({
-        sourceType: port.sourceType,
-        purpose: port.purpose,
-        sourceFile: port.sourceFile,
-        port: port.port,
-      });
-      const data = {
-        projectId: project.id,
-        port: port.port,
-        protocol: port.protocol,
-        host: normalizeHost(port.host),
-        sourceFile: port.sourceFile,
-        sourceLine: port.sourceLine,
-        sourceType: port.sourceType,
-        purpose: port.purpose,
-        isRuntimeDetected: port.isRuntimeDetected ?? false,
-        role,
-        agentId: payload.agentId,
-        lastSeenAt: scannedAt,
-        runtimeStatus: port.isRuntimeDetected ? 'active' : null,
-      };
-      const key = portKey(data);
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-
-      const existing = await prisma.portUsage.findFirst({
-        where: {
-          projectId: project.id,
-          port: port.port,
-          sourceFile: port.sourceFile,
-          sourceLine: port.sourceLine,
-          sourceType: port.sourceType,
-          protocol: port.protocol,
-          host: normalizeHost(port.host),
+      const project = await prisma.project.upsert({
+        where: { code: sp.code },
+        update: {
+          name: sp.name,
+          localPath: sp.localPath,
+          category: sp.category,
+          locationType: sp.locationType || existing?.locationType || 'local',
+          packageManager: sp.packageManager || existing?.packageManager || 'unknown',
+          startCommand: existing?.startCommand || sp.startCommand,
+          devCommand: sp.devCommand ?? existing?.devCommand,
+          buildCommand: sp.buildCommand ?? existing?.buildCommand,
+          deployCommand: existing?.deployCommand,
+          desktopStartCommand: sp.desktopStartCommand ?? existing?.desktopStartCommand,
+          pm2Name: sp.pm2Name ?? existing?.pm2Name,
+          healthUrl: sp.localHealthUrl || sp.healthUrl || existing?.healthUrl,
+          localWebUrl: sp.localWebUrl ?? existing?.localWebUrl,
+          localHealthUrl: sp.localHealthUrl ?? existing?.localHealthUrl,
+          publicUrl: sp.publicUrl ?? existing?.publicUrl,
+          internalUrl: sp.internalUrl ?? existing?.internalUrl,
+          serverPath: sp.serverPath ?? existing?.serverPath,
+          branch: sp.branch ?? existing?.branch,
+          owner: sp.owner ?? existing?.owner,
+          status: sp.status ?? existing?.status,
+          gitRemote: sp.gitRemote ?? existing?.gitRemote,
+          lastScannedAt: scannedAt,
+          notes: sp.notes ?? existing?.notes,
+        },
+        create: {
+          name: sp.name,
+          code: sp.code,
+          localPath: sp.localPath,
+          category: sp.category,
+          locationType: sp.locationType || 'local',
+          packageManager: sp.packageManager || 'unknown',
+          startCommand: sp.startCommand,
+          devCommand: sp.devCommand,
+          buildCommand: sp.buildCommand,
+          desktopStartCommand: sp.desktopStartCommand,
+          pm2Name: sp.pm2Name,
+          healthUrl: sp.localHealthUrl || sp.healthUrl,
+          localWebUrl: sp.localWebUrl,
+          localHealthUrl: sp.localHealthUrl,
+          publicUrl: sp.publicUrl,
+          internalUrl: sp.internalUrl,
+          serverPath: sp.serverPath,
+          branch: sp.branch,
+          owner: sp.owner,
+          status: sp.status,
+          gitRemote: sp.gitRemote,
+          lastScannedAt: scannedAt,
+          notes: sp.notes,
+          archived: false,
         },
       });
 
-      if (existing) {
-        await prisma.portUsage.update({
-          where: { id: existing.id },
-          data: { ...data, updatedAt: scannedAt },
-        });
-      } else {
-        await prisma.portUsage.create({ data });
-      }
-      portCount++;
-    }
-
-    for (const cmd of sp.commands) {
-      const existing = await prisma.commandProfile.findFirst({
-        where: { projectId: project.id, name: cmd.name, command: cmd.command },
+      await prisma.portUsage.deleteMany({
+        where: {
+          projectId: project.id,
+          isRuntimeDetected: false,
+          sourceType: { notIn: [...PRESERVED_SOURCE_TYPES] },
+        },
       });
-      if (!existing) {
-        await prisma.commandProfile.create({
-          data: {
+
+      const seenKeys = new Set<string>();
+      for (const port of sp.ports) {
+        const role = inferPortRole({
+          sourceType: port.sourceType,
+          purpose: port.purpose,
+          sourceFile: port.sourceFile,
+          port: port.port,
+        });
+        const data = {
+          projectId: project.id,
+          port: port.port,
+          protocol: port.protocol,
+          host: normalizeHost(port.host),
+          sourceFile: port.sourceFile,
+          sourceLine: port.sourceLine,
+          sourceType: port.sourceType,
+          purpose: port.purpose,
+          isRuntimeDetected: port.isRuntimeDetected ?? false,
+          role,
+          agentId: payload.agentId,
+          lastSeenAt: scannedAt,
+          runtimeStatus: port.isRuntimeDetected ? 'active' : null,
+        };
+        const key = portKey(data);
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+
+        const existing = await prisma.portUsage.findFirst({
+          where: {
             projectId: project.id,
-            name: cmd.name,
-            command: cmd.command,
-            cwd: cmd.cwd,
-            type: cmd.type,
-            agentId: payload.agentId,
+            port: port.port,
+            sourceFile: port.sourceFile,
+            sourceLine: port.sourceLine,
+            sourceType: port.sourceType,
+            protocol: port.protocol,
+            host: normalizeHost(port.host),
           },
         });
+
+        if (existing) {
+          await prisma.portUsage.update({
+            where: { id: existing.id },
+            data: { ...data, updatedAt: scannedAt },
+          });
+        } else {
+          await prisma.portUsage.create({ data });
+        }
+        portCount++;
       }
-    }
+
+      for (const cmd of sp.commands) {
+        const existing = await prisma.commandProfile.findFirst({
+          where: { projectId: project.id, name: cmd.name, command: cmd.command },
+        });
+        if (!existing) {
+          await prisma.commandProfile.create({
+            data: {
+              projectId: project.id,
+              name: cmd.name,
+              command: cmd.command,
+              cwd: cmd.cwd,
+              type: cmd.type,
+              agentId: payload.agentId,
+            },
+          });
+        }
+      }
+    });
   }
 
   const currentRuntimeKeys = new Set<string>();

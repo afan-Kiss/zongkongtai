@@ -3,8 +3,10 @@ import { WebSocketServer } from 'ws';
 import { createApp } from './app';
 import { config, validateProductionConfig } from './config';
 import { agentHub } from './services/agentHub';
+import { ensureSqlitePragmas } from './lib/prisma';
 
 validateProductionConfig();
+void ensureSqlitePragmas();
 
 const app = createApp();
 const server = http.createServer(app);

@@ -3,9 +3,11 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+const require = createRequire(import.meta.url);
 
 function loadEnvFile() {
   const fp = path.join(ROOT, '.env');
@@ -21,26 +23,34 @@ const SERVER = (process.env.CONTROL_SERVER_URL || 'http://8.137.126.18/control')
 const USER = process.env.ADMIN_USERNAME || 'admin';
 const PASS = process.env.ADMIN_PASSWORD || '';
 
+function loadManifests() {
+  try {
+    const { scanManifestsUnderRoot } = require('../packages/control-shared/dist/manifestFsScan.js');
+    const base = process.env.SCAN_ROOT || 'E:\\我的软件源码';
+    const { manifests, warnings } = scanManifestsUnderRoot(base);
+    return { manifests, warnings };
+  } catch {
+    return { manifests: [], warnings: ['请先 npm run build -w @zhubo/control-shared'] };
+  }
+}
+
 async function login() {
   const res = await fetch(`${SERVER}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: USER, password: PASS }),
   });
-  const cookie = res.headers.get('set-cookie')?.split(';')[0] || '';
-  if (!res.ok) throw new Error(`登录失败 ${res.status}`);
-  return cookie;
-}
-
-function loadManifests() {
-  const base = process.env.SCAN_ROOT || 'E:\\我的软件源码';
-  const out = [];
-  for (const ent of fs.readdirSync(base, { withFileTypes: true })) {
-    if (!ent.isDirectory()) continue;
-    const mf = path.join(base, ent.name, 'zhubo-control.manifest.json');
-    if (fs.existsSync(mf)) out.push(JSON.parse(fs.readFileSync(mf, 'utf8')));
+  const setCookie = res.headers.get('set-cookie') || '';
+  const cookie = setCookie
+    .split(',')
+    .map((s) => s.split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `登录失败 ${res.status}`);
   }
-  return out;
+  return cookie;
 }
 
 async function api(cookie, pathname, opts = {}) {
@@ -65,7 +75,9 @@ async function main() {
     const beforeCodes = new Set((before.data || []).map((p) => p.code));
     report.steps.push({ step: 'projects_before', count: (before.data || []).length });
 
-    const manifests = loadManifests();
+    const { manifests, warnings } = loadManifests();
+    report.steps.push({ step: 'manifest_scan', count: manifests.length, warnings });
+
     const imp = await api(cookie, '/api/projects/import-manifests', {
       method: 'POST',
       body: JSON.stringify({ manifests }),
@@ -78,20 +90,20 @@ async function main() {
     });
 
     const after = await api(cookie, '/api/projects');
-    const afterCodes = new Set((after.data || []).map((p) => p.code));
     report.steps.push({
       step: 'projects_after',
       count: (after.data || []).length,
-      codes: [...afterCodes],
-      newCodes: [...afterCodes].filter((c) => !beforeCodes.has(c)),
+      codes: (after.data || []).map((p) => p.code),
+      newCodes: (after.data || []).map((p) => p.code).filter((c) => !beforeCodes.has(c)),
     });
 
-    const ops = await api(cookie, '/api/dashboard/operations?limit=5');
-    const manifestOps = (ops.data || []).filter((o) => o.action === 'manifest_import');
+    const ops = await api(cookie, '/api/dashboard/operations?limit=20');
+    const list = Array.isArray(ops.data) ? ops.data : [];
     report.steps.push({
       step: 'operation_log',
-      ok: manifestOps.length > 0,
-      latest: manifestOps[0] || null,
+      manifest_import: list.filter((o) => o.action === 'manifest_import').slice(0, 3),
+      scan_upload: list.filter((o) => o.action === 'scan_upload').slice(0, 3),
+      scan_upload_failed: list.filter((o) => o.action === 'scan_upload_failed').slice(0, 3),
     });
 
     const rescan = await api(cookie, '/api/ports/rescan', { method: 'POST', body: '{}' });

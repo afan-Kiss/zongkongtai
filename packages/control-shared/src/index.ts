@@ -8,6 +8,9 @@ export {
   categoryToGroup,
   readManifestJson,
   manifestToScanFields,
+  validateManifest,
+  parsePortFromUrl,
+  collectManifestPorts,
 } from './manifest';
 export type {
   ZhuboControlManifest,
@@ -18,6 +21,9 @@ export type {
   ManifestLocationType,
   ProjectGroup,
 } from './manifest';
+export type { ManifestValidationResult } from './manifestValidate';
+export { scanManifestsUnderRoot } from './manifestFsScan';
+export type { ScanManifestsResult } from './manifestFsScan';
 export {
   QIANFAN_CANONICAL_SHOPS,
   QIANFAN_TEST_SHOP_EXACT,

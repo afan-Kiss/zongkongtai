@@ -43,6 +43,12 @@ function connect() {
         doScan();
         return;
       }
+      if (msg.type === 'scan_result_ack') {
+        const ack = msg as { ok?: boolean; message?: string };
+        if (ack.ok) console.log('云端确认：', ack.message || '扫描已入库');
+        else console.error('扫描完成但云端入库失败：', ack.message || '未知错误');
+        return;
+      }
       if (msg.type === 'run_command' && msg.requestId) {
         const result = await runWhitelistedCommand(msg.commandId, msg.command, msg.cwd);
         ws?.send(JSON.stringify({ type: 'command_result', requestId: msg.requestId, ...result }));

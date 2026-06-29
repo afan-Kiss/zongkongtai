@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload code to Aliyun and restart zhubo-control-center only (preserve .env)."""
+"""Upload code to Aliyun and restart zhubo-control-center only (preserve .env + prod.db)."""
 from __future__ import annotations
 
 import os
@@ -17,10 +17,10 @@ HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
 USER = os.environ.get("DEPLOY_USER", "root")
 PASSWORD = os.environ.get("SSH_PASS", "")
 DEPLOY_DIR = "/www/wwwroot/zhubo-control-center"
+SERVER_DIR = f"{DEPLOY_DIR}/apps/control-server"
+PROD_DB = f"{SERVER_DIR}/prod.db"
+LEGACY_DB = f"{SERVER_DIR}/prisma/prod.db"
 PUBLIC_HEALTH = f"http://{HOST}/control/api/health"
-
-SKIP_DIRS = {"node_modules", ".git", "dist", "build", ".vite", "coverage", "logs", "tmp", "cache"}
-SKIP_PARTS = {".env", "dev.db", "dev.db-journal", "__pycache__", "prod.db", "prod.db-journal"}
 
 
 def load_env_password() -> str:
@@ -85,9 +85,39 @@ def sftp_put(client: paramiko.SSHClient, local: Path, remote: str) -> None:
         sftp.close()
 
 
+def db_stats(client: paramiko.SSHClient, label: str) -> None:
+    run(
+        client,
+        f"""
+python3 - <<'PY'
+import sqlite3, os
+db = "{PROD_DB}"
+if not os.path.isfile(db):
+    print("{label}: prod.db 不存在")
+else:
+    con = sqlite3.connect(db)
+    cur = con.cursor()
+    def c(t):
+        try:
+            return cur.execute(f"select count(*) from {{t}}").fetchone()[0]
+        except Exception:
+            return "?"
+    print("{label}: prod.db 存在", db)
+    print("  SecretStore:", c("SecretStore"))
+    print("  Project:", c("Project"))
+    print("  Agent:", c("Agent"))
+    con.close()
+PY
+""",
+    )
+
+
 def main() -> None:
     client = connect()
     try:
+        print("=== 部署前生产库检查 ===")
+        db_stats(client, "部署前")
+
         with tempfile.TemporaryDirectory() as td:
             zip_path = Path(td) / "control-center-inc.zip"
             build_zip(zip_path)
@@ -99,15 +129,53 @@ def main() -> None:
             f"""
 set -e
 DEPLOY_DIR={DEPLOY_DIR}
+SERVER_DIR={SERVER_DIR}
+PROD_DB={PROD_DB}
+LEGACY_DB={LEGACY_DB}
 ENV_BAK="/tmp/control-env-backup-$$.env"
 DB_BAK="/tmp/control-prod-db-backup-$$.db"
+
 if [ -f "$DEPLOY_DIR/.env" ]; then cp "$DEPLOY_DIR/.env" "$ENV_BAK"; fi
-if [ -f "$DEPLOY_DIR/apps/control-server/prisma/prod.db" ]; then cp "$DEPLOY_DIR/apps/control-server/prisma/prod.db" "$DB_BAK"; fi
+
+# 优先备份正确路径 apps/control-server/prod.db
+if [ -f "$PROD_DB" ]; then
+  cp "$PROD_DB" "$DB_BAK"
+  echo "已备份生产库 apps/control-server/prod.db"
+elif [ -f "$LEGACY_DB" ]; then
+  cp "$LEGACY_DB" "$DB_BAK"
+  echo "已从旧路径 prisma/prod.db 备份（将迁移到 apps/control-server/prod.db）"
+fi
+
 rm -rf "$DEPLOY_DIR"
 mkdir -p "$DEPLOY_DIR"
 unzip -q /tmp/control-upload/control-center-inc.zip -d "$DEPLOY_DIR"
+
 if [ -f "$ENV_BAK" ]; then cp "$ENV_BAK" "$DEPLOY_DIR/.env"; fi
-if [ -f "$DB_BAK" ]; then mkdir -p "$DEPLOY_DIR/apps/control-server/prisma" && cp "$DB_BAK" "$DEPLOY_DIR/apps/control-server/prisma/prod.db"; fi
+mkdir -p "$SERVER_DIR"
+if [ -f "$DB_BAK" ]; then
+  cp "$DB_BAK" "$PROD_DB"
+  echo "已恢复生产库 apps/control-server/prod.db"
+fi
+
+# Prisma SQLite 路径相对 schema.prisma；生产必须用绝对路径指向 apps/control-server/prod.db
+if [ -f "$DEPLOY_DIR/.env" ]; then
+  if grep -q '^DATABASE_URL=' "$DEPLOY_DIR/.env"; then
+    sed -i "s|^DATABASE_URL=.*|DATABASE_URL=file:$PROD_DB|" "$DEPLOY_DIR/.env"
+  else
+    echo "DATABASE_URL=file:$PROD_DB" >> "$DEPLOY_DIR/.env"
+  fi
+  echo "已统一 DATABASE_URL=file:$PROD_DB"
+fi
+
+# 清理误连的空 prisma/prod.db（真实库在 apps/control-server/prod.db）
+if [ -f "$LEGACY_DB" ] && [ -f "$PROD_DB" ]; then
+  LEG_SIZE=$(stat -c%s "$LEGACY_DB" 2>/dev/null || echo 0)
+  PROD_SIZE=$(stat -c%s "$PROD_DB" 2>/dev/null || echo 0)
+  if [ "$LEG_SIZE" -lt 10000 ] && [ "$PROD_SIZE" -gt 10000 ]; then
+    rm -f "$LEGACY_DB" "$LEGACY_DB-wal" "$LEGACY_DB-shm"
+    echo "已清理空的 prisma/prod.db"
+  fi
+fi
 """,
         )
 
@@ -120,15 +188,18 @@ export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 if [ -s /root/.nvm/nvm.sh ]; then . /root/.nvm/nvm.sh; fi
 npm install -w @zhubo/control-shared -w @zhubo/control-web -w @zhubo/control-server
 cd apps/control-server
-export DATABASE_URL="${{DATABASE_URL:-file:./prisma/prod.db}}"
+export DATABASE_URL="file:{PROD_DB}"
 npx prisma generate
 cd {DEPLOY_DIR}
 npm run build -w @zhubo/control-shared
 npm run build -w @zhubo/control-web
 npm run build -w @zhubo/control-server
 cd apps/control-server
-if [ ! -s prisma/prod.db ]; then
-  npx prisma db push --accept-data-loss
+if [ -s prod.db ]; then
+  echo "未执行 db push，因为生产库已存在 apps/control-server/prod.db"
+else
+  echo "首次部署：创建空库 schema"
+  npx prisma db push
   set -a && . {DEPLOY_DIR}/.env && set +a
   npx tsx prisma/seed.ts || true
 fi
@@ -142,7 +213,10 @@ curl -sf {PUBLIC_HEALTH}
         )
         if code != 0:
             sys.exit(code)
-        print("\nIncremental deploy OK (zhubo-control-center restarted, .env preserved)")
+
+        print("\n=== 部署后生产库检查 ===")
+        db_stats(client, "部署后")
+        print("\nIncremental deploy OK (zhubo-control-center restarted, prod.db preserved)")
     finally:
         client.close()
 

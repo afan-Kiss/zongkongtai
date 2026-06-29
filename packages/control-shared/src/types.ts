@@ -21,6 +21,11 @@ export interface ScanProjectResult {
   localWebUrl?: string;
   localHealthUrl?: string;
   publicUrl?: string;
+  internalUrl?: string;
+  serverPath?: string;
+  branch?: string;
+  owner?: string;
+  status?: string;
   gitRemote?: string;
   ports: ScanPortResult[];
   commands: ScanCommandResult[];
@@ -43,6 +48,7 @@ export interface ScanCommandResult {
   command: string;
   cwd: string;
   type: CommandType;
+  source?: 'manifest' | 'scan' | 'manual';
 }
 
 export interface AgentScanPayload {
@@ -73,6 +79,17 @@ export type ServerAgentMessage =
   | { type: 'registered'; agentId: string }
   | { type: 'ping' }
   | { type: 'request_scan' }
+  | {
+      type: 'scan_result_ack';
+      ok: boolean;
+      message: string;
+      stats?: {
+        projectCount?: number;
+        portCount?: number;
+        conflictCount?: number;
+        warningCount?: number;
+      };
+    }
   | {
       type: 'run_command';
       requestId: string;

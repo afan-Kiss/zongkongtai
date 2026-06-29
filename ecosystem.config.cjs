@@ -20,6 +20,8 @@ function loadEnvFile(filePath) {
 
 const fileEnv = loadEnvFile(path.join(__dirname, '.env'));
 
+const prodDbPath = path.join(__dirname, 'apps/control-server/prod.db');
+
 module.exports = {
   apps: [
     {
@@ -37,7 +39,8 @@ module.exports = {
         SERVICE_TOKEN: fileEnv.SERVICE_TOKEN,
         ADMIN_USERNAME: fileEnv.ADMIN_USERNAME,
         ADMIN_PASSWORD: fileEnv.ADMIN_PASSWORD,
-        DATABASE_URL: fileEnv.DATABASE_URL || 'file:./prod.db',
+        // Prisma SQLite 路径相对 schema.prisma 所在目录；生产用绝对路径避免误连 prisma/prod.db
+        DATABASE_URL: fileEnv.DATABASE_URL || `file:${prodDbPath}`,
       },
       max_memory_restart: '512M',
       error_file: '/www/wwwroot/zhubo-control-center/logs/pm2-error.log',

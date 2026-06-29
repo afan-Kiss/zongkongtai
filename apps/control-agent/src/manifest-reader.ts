@@ -4,15 +4,17 @@ import {
   MANIFEST_FILENAME,
   readManifestJson,
   manifestToScanFields,
+  scanManifestsUnderRoot,
   type ZhuboControlManifest,
 } from '@zhubo/control-shared';
+
+export { scanManifestsUnderRoot };
 
 export function readProjectManifest(projectDir: string): ZhuboControlManifest | null {
   const file = path.join(projectDir, MANIFEST_FILENAME);
   if (!fs.existsSync(file)) return null;
   try {
-    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return readManifestJson(raw);
+    return readManifestJson(JSON.parse(fs.readFileSync(file, 'utf8')));
   } catch {
     return null;
   }
@@ -48,6 +50,11 @@ export function applyManifestToScan(
     localWebUrl: fields.localWebUrl,
     localHealthUrl: fields.localHealthUrl,
     publicUrl: fields.publicUrl,
+    internalUrl: fields.internalUrl,
+    serverPath: fields.serverPath,
+    branch: fields.branch,
+    owner: fields.owner,
+    status: fields.status,
     gitRemote: manifest.gitRemote || scan.gitRemote,
     ports: mergedPorts,
     commands: fields.commands.length ? [...scan.commands, ...fields.commands] : scan.commands,
@@ -55,36 +62,4 @@ export function applyManifestToScan(
       .filter(Boolean)
       .join('\n'),
   };
-}
-
-export function scanManifestsUnderRoot(basePath: string): ZhuboControlManifest[] {
-  const out: ZhuboControlManifest[] = [];
-  if (!fs.existsSync(basePath)) return out;
-
-  const walk = (dir: string, depth: number) => {
-    const m = readProjectManifest(dir);
-    if (m) {
-      out.push({ ...m, localPath: m.localPath || dir });
-      return;
-    }
-    if (depth > 2) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const ent of entries) {
-      if (!ent.isDirectory()) continue;
-      if (['node_modules', '.git', 'dist', 'build'].includes(ent.name)) continue;
-      walk(path.join(dir, ent.name), depth + 1);
-    }
-  };
-
-  for (const ent of fs.readdirSync(basePath, { withFileTypes: true })) {
-    if (!ent.isDirectory()) continue;
-    if (['node_modules', '.git'].includes(ent.name)) continue;
-    walk(path.join(basePath, ent.name), 0);
-  }
-  return out;
 }

@@ -1,5 +1,7 @@
 export const MANIFEST_FILENAME = 'zhubo-control.manifest.json';
 
+import { parsePortFromUrl } from './manifestValidate';
+
 export type ManifestHealthType = 'http' | 'process' | 'missing';
 export type ManifestCookieMode = 'none' | 'pending' | 'control';
 export type ManifestLocationType = 'local' | 'cloud' | 'mixed';
@@ -36,6 +38,11 @@ export interface ZhuboControlManifest {
   localWebUrl?: string;
   localHealthUrl?: string;
   publicUrl?: string;
+  internalUrl?: string;
+  serverPath?: string;
+  branch?: string;
+  owner?: string;
+  status?: string;
   healthType?: ManifestHealthType;
   healthUrl?: string;
   startCommand?: string;
@@ -77,6 +84,30 @@ export function categoryToGroup(category: string, favorite?: boolean): ProjectGr
   return '其他';
 }
 
+export function collectManifestPorts(m: ZhuboControlManifest): number[] {
+  const set = new Set<number>();
+  for (const p of m.ports || []) {
+    if (p >= 1 && p <= 65535) set.add(p);
+  }
+  for (const s of m.services || []) {
+    if (s.port != null && s.port >= 1 && s.port <= 65535) set.add(s.port);
+    for (const url of [s.healthUrl, s.webUrl]) {
+      const port = parsePortFromUrl(url);
+      if (port) set.add(port);
+    }
+  }
+  for (const url of [m.localWebUrl, m.localHealthUrl, m.healthUrl, m.internalUrl]) {
+    const port = parsePortFromUrl(url);
+    if (port) set.add(port);
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+export { validateManifest, parsePortFromUrl } from './manifestValidate';
+export type { ManifestValidationResult } from './manifestValidate';
+export { scanManifestsUnderRoot } from './manifestFsScan';
+export type { ScanManifestsResult } from './manifestFsScan';
+
 export function readManifestJson(raw: unknown): ZhuboControlManifest | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
@@ -97,6 +128,11 @@ export function readManifestJson(raw: unknown): ZhuboControlManifest | null {
     localWebUrl: o.localWebUrl ? String(o.localWebUrl) : undefined,
     localHealthUrl: o.localHealthUrl ? String(o.localHealthUrl) : undefined,
     publicUrl: o.publicUrl ? String(o.publicUrl) : undefined,
+    internalUrl: o.internalUrl ? String(o.internalUrl) : undefined,
+    serverPath: o.serverPath ? String(o.serverPath) : undefined,
+    branch: o.branch ? String(o.branch) : undefined,
+    owner: o.owner ? String(o.owner) : undefined,
+    status: o.status ? String(o.status) : undefined,
     healthType: (o.healthType as ManifestHealthType) || 'http',
     healthUrl: o.healthUrl ? String(o.healthUrl) : undefined,
     startCommand: o.startCommand ? String(o.startCommand) : undefined,
@@ -113,12 +149,18 @@ export function readManifestJson(raw: unknown): ZhuboControlManifest | null {
 }
 
 export function manifestToScanFields(m: ZhuboControlManifest, projectDir: string) {
+  const allPorts = collectManifestPorts(m);
   const healthUrl =
     m.localHealthUrl ||
     m.healthUrl ||
-    (m.healthType === 'http' && m.ports?.[0]
-      ? `http://127.0.0.1:${m.ports[0]}/api/health`
+    (m.healthType === 'http' && allPorts[0]
+      ? `http://127.0.0.1:${allPorts[0]}/api/health`
       : undefined);
+
+  const servicePorts = new Map<number, string>();
+  for (const s of m.services || []) {
+    if (s.port != null) servicePorts.set(s.port, s.name);
+  }
 
   return {
     name: m.name,
@@ -134,23 +176,31 @@ export function manifestToScanFields(m: ZhuboControlManifest, projectDir: string
     localWebUrl: m.localWebUrl,
     localHealthUrl: m.localHealthUrl || healthUrl,
     publicUrl: m.publicUrl,
+    internalUrl: m.internalUrl,
+    serverPath: m.serverPath,
+    branch: m.branch,
+    owner: m.owner,
+    status: m.status,
     desktopStartCommand: m.desktopStartCommand,
     locationType: m.locationType || 'local',
     notes: m.control?.notes,
-    ports: (m.ports || []).map((port) => ({
+    ports: allPorts.map((port) => ({
       port,
       protocol: 'http',
       host: '127.0.0.1',
       sourceFile: MANIFEST_FILENAME,
       sourceLine: 0,
       sourceType: 'manifest',
-      purpose: `[manifest] ${m.name} :${port}`,
+      purpose: servicePorts.has(port)
+        ? `[manifest:service] ${servicePorts.get(port)} :${port}`
+        : `[manifest] ${m.name} :${port}`,
     })),
     commands: (m.services || []).map((s) => ({
       name: s.name,
       command: s.command,
       cwd: m.localPath || projectDir,
       type: (s.type || 'custom') as import('./types').CommandType,
+      source: 'manifest' as const,
     })),
   };
 }
