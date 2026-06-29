@@ -103,6 +103,41 @@ export class CloudClient {
     return this.request<any[]>('/api/dashboard/operations');
   }
 
+  async healthCheck(url: string) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      const body = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, message: (body as { message?: string }).message };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  async stewardBackups() {
+    return this.request<any[]>('/api/steward/backups');
+  }
+
+  async stewardCreateBackup(label?: string) {
+    return this.request<{ ok: boolean; record: unknown }>('/api/steward/backups', {
+      method: 'POST',
+      body: JSON.stringify({ label }),
+    });
+  }
+
+  async stewardRestoreBackup(id: string) {
+    return this.request<{ ok: boolean; message: string }>(`/api/steward/backups/${id}/restore`, {
+      method: 'POST',
+    });
+  }
+
+  async stewardDeployments() {
+    return this.request<any[]>('/api/steward/deployments');
+  }
+
+  async stewardTasks() {
+    return this.request<any[]>('/api/steward/tasks');
+  }
+
   async importManifests(manifests: unknown[]) {
     return this.request<{
       ok: boolean;

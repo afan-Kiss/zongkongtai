@@ -160,6 +160,26 @@ const api = {
 
     getAbout: () => ipcRenderer.invoke('app:getAbout'),
   },
+
+  git: {
+    list: () => ipcRenderer.invoke('git:list'),
+    status: (opts: unknown) => ipcRenderer.invoke('git:status', opts),
+    commitPush: (opts: unknown) => ipcRenderer.invoke('git:commitPush', opts),
+    pull: (localPath: string) => ipcRenderer.invoke('git:pull', localPath),
+    githubUrl: (remote?: string) => ipcRenderer.invoke('git:githubUrl', remote),
+  },
+
+  steward: {
+    healthCheck: () => ipcRenderer.invoke('steward:healthCheck'),
+    repair: (action: string) => ipcRenderer.invoke('steward:repair', action),
+    workdayStart: () => ipcRenderer.invoke('steward:workdayStart'),
+    workdayEnd: () => ipcRenderer.invoke('steward:workdayEnd'),
+    backups: () => ipcRenderer.invoke('steward:backups'),
+    createBackup: (label?: string) => ipcRenderer.invoke('steward:createBackup', label),
+    restoreBackup: (id: string) => ipcRenderer.invoke('steward:restoreBackup', id),
+    deployments: () => ipcRenderer.invoke('steward:deployments'),
+    tasks: () => ipcRenderer.invoke('steward:tasks'),
+  },
 };
 
 contextBridge.exposeInMainWorld('zhuboDesktop', api);

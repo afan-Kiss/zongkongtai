@@ -11,6 +11,7 @@ import secretRoutes from './routes/secrets';
 import commandRoutes from './routes/commands';
 import agentRoutes from './routes/agents';
 import dashboardRoutes from './routes/dashboard';
+import stewardRoutes from './routes/steward';
 
 export function createApp() {
   const app = express();
@@ -52,6 +53,7 @@ export function createApp() {
   app.use('/api/commands', commandRoutes);
   app.use('/api/agents', agentRoutes);
   app.use('/api/dashboard', dashboardRoutes);
+  app.use('/api/steward', stewardRoutes);
 
   const webDist = config.webDist;
   app.use(express.static(webDist));

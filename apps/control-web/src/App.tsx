@@ -12,6 +12,7 @@ import CommandsPage from './pages/Commands';
 import AgentsPage from './pages/Agents';
 import HealthPage from './pages/Health';
 import OperationsPage from './pages/Operations';
+import GitStatusPage from './pages/GitStatus';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState<boolean | null>(null);
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="commands" element={<CommandsPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="health" element={<HealthPage />} />
+        <Route path="git-status" element={<GitStatusPage />} />
         <Route path="operations" element={<OperationsPage />} />
       </Route>
     </Routes>

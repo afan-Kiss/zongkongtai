@@ -37,14 +37,21 @@ import { isAutoLaunchEnabled, setAutoLaunch } from './auto-launch';
 
 import { fileLog } from './file-logger';
 
-import { agentManager } from './agent-manager';
+import { agentManager, resolveMonorepoRoot } from './agent-manager';
 import {
   scanManifestsLocal,
   getScanRoot,
   enrichProjectsWithManifests,
   runAgentScanCli,
 } from './manifest-scanner';
-import { resolveMonorepoRoot } from './agent-manager';
+import {
+  listGitStatuses,
+  getGitStatusForPath,
+  gitCommitAndPush,
+  gitPullLatest,
+  githubUrlFromRemote,
+} from './git-manager';
+import { runHealthCheck, runHealthRepair, runWorkdayStart, runWorkdayEnd } from './health-check';
 import {
   assertAllowedExternalUrl,
   assertAllowedOpenPath,
@@ -521,5 +528,64 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     if (name === 'exe') return process.execPath;
 
     return app.getAppPath();
+  });
+
+  ipcMain.handle('git:list', async () => {
+    await cloudClient.ensureLogin();
+    const projects = await cloudClient.projects();
+    return listGitStatuses(projects);
+  });
+
+  ipcMain.handle(
+    'git:status',
+    (
+      _e,
+      opts: { localPath: string; projectCode: string; projectName: string; gitRemote?: string },
+    ) => getGitStatusForPath(opts),
+  );
+
+  ipcMain.handle(
+    'git:commitPush',
+    async (
+      _e,
+      opts: { localPath: string; message?: string; paths?: string[]; pushOnly?: boolean },
+    ) => gitCommitAndPush(opts),
+  );
+
+  ipcMain.handle('git:pull', (_e, localPath: string) => gitPullLatest(localPath));
+
+  ipcMain.handle('git:githubUrl', (_e, remote?: string) => githubUrlFromRemote(remote));
+
+  ipcMain.handle('steward:healthCheck', () => runHealthCheck());
+
+  ipcMain.handle('steward:repair', (_e, action: string) => runHealthRepair(action));
+
+  ipcMain.handle('steward:workdayStart', () => runWorkdayStart());
+
+  ipcMain.handle('steward:workdayEnd', () => runWorkdayEnd());
+
+  ipcMain.handle('steward:backups', async () => {
+    await cloudClient.ensureLogin();
+    return cloudClient.stewardBackups();
+  });
+
+  ipcMain.handle('steward:createBackup', async (_e, label?: string) => {
+    await cloudClient.ensureLogin();
+    return cloudClient.stewardCreateBackup(label);
+  });
+
+  ipcMain.handle('steward:restoreBackup', async (_e, id: string) => {
+    await cloudClient.ensureLogin();
+    return cloudClient.stewardRestoreBackup(id);
+  });
+
+  ipcMain.handle('steward:deployments', async () => {
+    await cloudClient.ensureLogin();
+    return cloudClient.stewardDeployments();
+  });
+
+  ipcMain.handle('steward:tasks', async () => {
+    await cloudClient.ensureLogin();
+    return cloudClient.stewardTasks();
   });
 }

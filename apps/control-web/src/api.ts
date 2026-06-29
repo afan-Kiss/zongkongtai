@@ -56,4 +56,7 @@ export const api = {
   agents: () => request<any[]>('/api/agents'),
   healthResults: () => request<any[]>('/api/dashboard/health-results/list'),
   operations: () => request<any[]>('/api/dashboard/operations'),
+  stewardGitStatus: () => request<any[]>('/api/steward/git-status'),
+  stewardBackups: () => request<any[]>('/api/steward/backups'),
+  stewardDeployments: () => request<any[]>('/api/steward/deployments'),
 };

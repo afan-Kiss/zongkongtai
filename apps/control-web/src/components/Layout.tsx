@@ -18,6 +18,7 @@ export function Layout() {
             首页仪表盘
           </NavLink>
           <NavLink to="/projects">项目管理</NavLink>
+          <NavLink to="/git-status">Git 状态</NavLink>
           <NavLink to="/ports">端口管理</NavLink>
           <NavLink to="/secrets">Cookie 管理</NavLink>
           <NavLink to="/commands">启动命令</NavLink>
