@@ -20,6 +20,7 @@ apps/*/dist/
 deploy-output-credentials.txt
 deploy-output.txt
 deploy-output-web.zip
+scripts/__pycache__/
 scripts/acceptance-report.json
 scripts/port-fix-report.json
 apps/control-desktop/dist-desktop/
