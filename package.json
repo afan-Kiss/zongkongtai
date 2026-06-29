@@ -22,7 +22,10 @@
     "db:seed": "npm run db:seed -w @zhubo/control-server",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
-    "check": "npm run format:check && npm run build"
+    "check": "npm run format:check && npm run build",
+    "control:init-project": "node scripts/init-project.mjs",
+    "control:acceptance-scan": "node scripts/acceptance-scan.mjs",
+    "control:acceptance-import": "node scripts/acceptance-import.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

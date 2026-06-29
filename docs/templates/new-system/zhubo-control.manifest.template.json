@@ -1,0 +1,39 @@
+{
+  "manifestVersion": 1,
+  "name": "示例新项目",
+  "code": "example-new-system",
+  "category": "其他",
+  "locationType": "local",
+  "gitRemote": "https://github.com/your-org/your-repo.git",
+  "localPath": "E:\\我的软件源码\\示例新项目",
+  "desktopStartCommand": "npm run dev",
+  "desktopStopMode": "process-tree",
+  "localWebUrl": "http://127.0.0.1:5173",
+  "localHealthUrl": "http://127.0.0.1:3000/api/health",
+  "publicUrl": "",
+  "internalUrl": "http://127.0.0.1:3000",
+  "healthType": "http",
+  "ports": [3000, 5173],
+  "services": [
+    {
+      "name": "server",
+      "command": "npm run dev:server",
+      "port": 3000,
+      "healthUrl": "http://127.0.0.1:3000/api/health"
+    },
+    {
+      "name": "web",
+      "command": "npm run dev:web",
+      "port": 5173,
+      "webUrl": "http://127.0.0.1:5173"
+    }
+  ],
+  "control": {
+    "enabled": true,
+    "showInDesktop": true,
+    "autoStart": false,
+    "cookieMode": "none",
+    "favorite": false,
+    "notes": "复制本模板为项目根目录 zhubo-control.manifest.json，按实际情况修改。开发中可写 notes 说明先登记不启动。"
+  }
+}
