@@ -30,6 +30,7 @@ interface AppState {
   setProjects: (p: Project[]) => void;
   selectProject: (id: string | null) => void;
   setProcess: (proc: ProcessInfo) => void;
+  syncExternalRunning: (rows: ProcessInfo[]) => void;
   setTerminalExpanded: (v: boolean) => void;
   setTerminalFullscreen: (v: boolean) => void;
   setActiveTerminal: (id: string | null) => void;
@@ -39,6 +40,12 @@ interface AppState {
   setPortConflictAnalysis: (a: PortConflictAnalysis | null) => void;
   setPortConflictOpen: (v: boolean) => void;
   ignorePortConflict: (id: string) => void;
+}
+
+function countRunning(processes: Record<string, ProcessInfo>) {
+  return Object.values(processes).filter(
+    (p) => p.status === 'running' || p.status === 'external-running',
+  ).length;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -77,8 +84,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   setProcess: (proc) =>
     set((s) => {
       const processes = { ...s.processes, [proc.projectId]: proc };
-      const runningCount = Object.values(processes).filter((p) => p.status === 'running').length;
-      return { processes, runningCount };
+      return { processes, runningCount: countRunning(processes) };
+    }),
+  syncExternalRunning: (rows) =>
+    set((s) => {
+      const processes = { ...s.processes };
+      const detectedIds = new Set(rows.map((r) => r.projectId));
+      for (const [id, proc] of Object.entries(processes)) {
+        if (proc.status === 'external-running' && !detectedIds.has(id)) {
+          delete processes[id];
+        }
+      }
+      for (const row of rows) {
+        const existing = processes[row.projectId];
+        if (
+          existing?.status === 'running' ||
+          existing?.status === 'starting' ||
+          existing?.status === 'stopping'
+        ) {
+          continue;
+        }
+        if (row.status === 'external-running' || row.status === 'running') {
+          processes[row.projectId] = row;
+        }
+      }
+      return { processes, runningCount: countRunning(processes) };
     }),
   setTerminalExpanded: (terminalExpanded) => set({ terminalExpanded }),
   setTerminalFullscreen: (terminalFullscreen) => set({ terminalFullscreen }),

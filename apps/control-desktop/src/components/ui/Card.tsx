@@ -57,10 +57,12 @@ export function StatusDot({ status }: { status: string }) {
   const color =
     status === 'running'
       ? 'bg-green-400 animate-breathe shadow-[0_0_8px_rgba(74,222,128,0.6)]'
-      : status === 'starting'
-        ? 'bg-amber-400 animate-pulse'
-        : status === 'error'
-          ? 'bg-red-400 animate-pulse-error shadow-[0_0_8px_rgba(248,113,113,0.5)]'
-          : 'bg-muted-foreground/40';
+      : status === 'external-running'
+        ? 'bg-cyan-400 animate-breathe shadow-[0_0_8px_rgba(34,211,238,0.55)]'
+        : status === 'starting'
+          ? 'bg-amber-400 animate-pulse'
+          : status === 'error'
+            ? 'bg-red-400 animate-pulse-error shadow-[0_0_8px_rgba(248,113,113,0.5)]'
+            : 'bg-muted-foreground/40';
   return <span className={cn('inline-block h-2.5 w-2.5 rounded-full', color)} />;
 }

@@ -33,6 +33,8 @@ function statusLabel(status?: string) {
   switch (status) {
     case 'running':
       return '运行中';
+    case 'external-running':
+      return '外部运行中';
     case 'starting':
       return '启动中';
     case 'error':
@@ -49,7 +51,7 @@ function statusLabel(status?: string) {
 function statusVariant(
   status?: string,
 ): 'success' | 'warning' | 'destructive' | 'muted' | 'default' {
-  if (status === 'running') return 'success';
+  if (status === 'running' || status === 'external-running') return 'success';
   if (status === 'error') return 'destructive';
   if (status === 'starting') return 'warning';
   return 'muted';
@@ -67,7 +69,9 @@ export function ProjectCard({ project }: { project: Project }) {
   );
   const ports = formatPortList(project.ports, 4);
   const portsDeduped = hasDuplicatePortRegistration(project.ports);
-  const isRunning = status === 'running';
+  const isExternal = status === 'external-running';
+  const isManagedRunning = status === 'running';
+  const isRunning = isManagedRunning || isExternal;
   const isError = status === 'error';
 
   const start = async () => {
@@ -132,14 +136,16 @@ export function ProjectCard({ project }: { project: Project }) {
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className={
         isRunning
-          ? 'rounded-lg ring-1 ring-green-500/30'
+          ? isExternal
+            ? 'rounded-lg ring-1 ring-cyan-500/30'
+            : 'rounded-lg ring-1 ring-green-500/30'
           : isError
             ? 'rounded-lg ring-1 ring-red-500/30'
             : ''
       }
     >
       <Card
-        className={`h-full cursor-pointer ${isRunning ? 'shadow-[0_0_24px_rgba(74,222,128,0.12)]' : ''}`}
+        className={`h-full cursor-pointer ${isRunning ? 'shadow-[0_0_24px_rgba(74,222,128,0.12)]' : ''} ${isExternal ? 'shadow-[0_0_20px_rgba(34,211,238,0.1)]' : ''}`}
         onClick={() => selectProject(project.id)}
       >
         <CardHeader>
@@ -153,7 +159,12 @@ export function ProjectCard({ project }: { project: Project }) {
                 {project.category || '未分类'}
               </div>
             </div>
-            <Badge variant={statusVariant(status)}>{statusLabel(status)}</Badge>
+            <Badge
+              variant={statusVariant(status)}
+              className={isExternal ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300' : undefined}
+            >
+              {statusLabel(status)}
+            </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -171,16 +182,20 @@ export function ProjectCard({ project }: { project: Project }) {
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
             {!selfControl && (
               <>
-                <Tooltip content="启动这个项目，并在下方显示终端日志">
+                <Tooltip
+                  content={isExternal ? '该项目已在外部启动' : '启动这个项目，并在下方显示终端日志'}
+                >
                   <Button
                     size="sm"
                     onClick={start}
-                    disabled={status === 'running' || status === 'starting'}
+                    disabled={isExternal || status === 'running' || status === 'starting'}
                   >
-                    <Play className="h-3 w-3" /> 启动
+                    <Play className="h-3 w-3" /> {isExternal ? '已在外部运行' : '启动'}
                   </Button>
                 </Tooltip>
-                <Tooltip content="停止由总控启动的进程">
+                <Tooltip
+                  content={isExternal ? '不是总控启动的，请在原窗口关闭' : '停止由总控启动的进程'}
+                >
                   <Button
                     size="sm"
                     variant="secondary"
@@ -190,8 +205,13 @@ export function ProjectCard({ project }: { project: Project }) {
                     <Square className="h-3 w-3" /> 停止
                   </Button>
                 </Tooltip>
-                <Tooltip content="先停止再重新启动">
-                  <Button size="sm" variant="ghost" onClick={restart}>
+                <Tooltip content={isExternal ? '外部运行项目不能由总控重启' : '先停止再重新启动'}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={restart}
+                    disabled={isExternal || status !== 'running'}
+                  >
                     <RotateCcw className="h-3 w-3" />
                   </Button>
                 </Tooltip>
@@ -336,7 +356,7 @@ export function RightPanel() {
         <AccessUrlCard
           project={project}
           webUrl={webUrl}
-          visible={proc?.status === 'running'}
+          visible={proc?.status === 'running' || proc?.status === 'external-running'}
           onCopy={copyUrl}
           onOpen={(url) => window.zhuboDesktop.webview.open(project.id, url)}
           onExternal={(url) => window.zhuboDesktop.shell.openExternal(url)}

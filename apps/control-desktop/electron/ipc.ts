@@ -40,6 +40,7 @@ import {
 } from './native-helper-client';
 
 import { loadLocalProjectsFromManifests, findLocalProjectById } from './local-projects';
+import { detectAllExternalRunning, type DetectableProject } from './external-project-status';
 import { WORKSPACES, runWorkspace } from './workspace-manager';
 
 import { getLogDir } from './file-logger';
@@ -204,6 +205,38 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('projects:loadLocal', () => {
     const local = loadLocalProjectsFromManifests();
     return enrichProjectsWithManifests(local as any[]);
+  });
+
+  ipcMain.handle('projects:detectExternalRunning', async () => {
+    const projects = loadLocalProjectsFromManifests() as DetectableProject[];
+    const detected = await detectAllExternalRunning(projects);
+    return detected
+      .filter((r) => r.status === 'running' || r.status === 'external-running')
+      .map((r) => {
+        if (r.status === 'running') {
+          const m = processManager.get(r.projectId);
+          if (!m) return null;
+          return {
+            projectId: m.projectId,
+            projectName: m.projectName,
+            command: m.command,
+            cwd: m.cwd,
+            status: 'running' as const,
+            pid: m.pid,
+          };
+        }
+        const proj = projects.find((p) => p.id === r.projectId);
+        return {
+          projectId: r.projectId,
+          projectName: r.projectName,
+          command: r.message || '',
+          cwd: proj?.localPath || '',
+          status: 'external-running' as const,
+          pid: r.pid,
+          externalSource: r.source,
+        };
+      })
+      .filter(Boolean);
   });
 
   ipcMain.handle('cloud:projects', async () => {

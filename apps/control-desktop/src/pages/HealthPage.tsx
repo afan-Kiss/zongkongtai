@@ -24,7 +24,13 @@ const DOT: Record<string, string> = {
   skipped: 'bg-muted-foreground',
 };
 
-const SIMPLE_IDS = new Set(['local_manifest', 'git_unpushed', 'ports', 'exe_config']);
+const SIMPLE_IDS = new Set([
+  'local_manifest',
+  'git_unpushed',
+  'ports',
+  'exe_config',
+  'external_running',
+]);
 
 function normalizeReport(raw: unknown): HealthCheckReport | null {
   if (!raw || typeof raw !== 'object') return null;

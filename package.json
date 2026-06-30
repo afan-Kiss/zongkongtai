@@ -19,6 +19,7 @@
     "control:acceptance-desktop-performance": "node scripts/acceptance-desktop-performance.mjs",
     "control:acceptance-port-conflicts": "node scripts/acceptance-port-conflicts.mjs",
     "control:acceptance-local-mode": "node scripts/acceptance-local-mode.mjs",
+    "control:acceptance-external-running": "node scripts/acceptance-external-running.mjs",
     "control:acceptance-minimal-local": "node scripts/acceptance-minimal-local.mjs",
     "control:acceptance-local-only": "node scripts/acceptance-local-only.mjs",
     "control:acceptance-source-format": "node scripts/acceptance-source-format.mjs"

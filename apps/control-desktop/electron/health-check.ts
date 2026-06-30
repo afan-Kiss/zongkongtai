@@ -13,6 +13,7 @@ import { listGitStatusesAsync, collectGitProjects } from './git-manager';
 import { scanManifestFileForbidden } from './forbidden-url';
 import { analyzePortConflictsAsync } from './port-conflict-analyzer';
 import { loadLocalProjectsFromManifests } from './local-projects';
+import { detectAllExternalRunning, type DetectableProject } from './external-project-status';
 
 export type HealthProgress = (step: string, progress: number, message?: string) => void;
 
@@ -323,9 +324,26 @@ export async function runHealthCheckSimple(signal?: AbortSignal): Promise<Health
       repairable: !cfg.scanRoot?.trim(),
       category: 'config',
     }),
+    await checkExternalRunningRecognition(),
     ...(await checkLocalProjectHealth(localProjects)),
   ];
   return summarize(items);
+}
+
+async function checkExternalRunningRecognition(): Promise<HealthCheckItem> {
+  const projects = loadLocalProjectsFromManifests() as DetectableProject[];
+  const results = await detectAllExternalRunning(projects);
+  const external = results.filter((r) => r.status === 'external-running');
+  const names = external.map((r) => r.projectName).join('、');
+  return item({
+    id: 'external_running',
+    title: '外部运行项目识别',
+    status: 'ok',
+    message: external.length
+      ? `检测到 ${external.length} 个外部运行项目：${names}。`
+      : '暂无外部运行项目。',
+    category: 'project',
+  });
 }
 
 async function checkLocalProjectHealth(

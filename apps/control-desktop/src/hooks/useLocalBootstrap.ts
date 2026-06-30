@@ -1,6 +1,16 @@
 import { useEffect } from 'react';
 import { deduplicateProjects } from '@/lib/projectDedup';
 import { useAppStore } from '@/stores/appStore';
+import type { ProcessInfo } from '@/types/desktop';
+
+export async function refreshExternalRunning() {
+  try {
+    const rows = (await window.zhuboDesktop.projects.detectExternalRunning()) as ProcessInfo[];
+    useAppStore.getState().syncExternalRunning(rows);
+  } catch {
+    /* 外部识别失败不阻塞 */
+  }
+}
 
 export function useLocalBootstrap() {
   const setProjects = useAppStore((s) => s.setProjects);
@@ -24,6 +34,8 @@ export function useLocalBootstrap() {
       } catch {
         /* 端口检测失败不阻塞 */
       }
+
+      await refreshExternalRunning();
     };
 
     refresh();

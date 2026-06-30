@@ -132,6 +132,7 @@ const api = {
     refresh: () => ipcRenderer.invoke('projects:refresh'),
     rescanDisk: () => ipcRenderer.invoke('projects:rescanDisk'),
     loadLocal: () => ipcRenderer.invoke('projects:loadLocal'),
+    detectExternalRunning: () => ipcRenderer.invoke('projects:detectExternalRunning'),
   },
 
   app: {

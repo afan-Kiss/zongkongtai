@@ -5,6 +5,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { ProjectCard } from '@/components/ProjectCard';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
+import { refreshExternalRunning } from '@/hooks/useLocalBootstrap';
 import { dailyFeaturedProjects } from '@/lib/projectDedup';
 import type { HealthCheckReport } from '@zhubo/control-shared';
 
@@ -47,6 +48,7 @@ export function OverviewPage() {
       setGitUnpushed(
         (rows as Array<{ hasUnpushed?: boolean }>).filter((r) => r.hasUnpushed).length,
       );
+      await refreshExternalRunning();
       pushToast('success', '状态已刷新');
     } catch {
       pushToast('info', '刷新失败，请稍后重试');

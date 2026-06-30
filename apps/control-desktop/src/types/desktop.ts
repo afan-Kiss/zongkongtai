@@ -68,10 +68,11 @@ export interface ProcessInfo {
   projectName: string;
   command: string;
   cwd: string;
-  status: 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
+  status: 'idle' | 'starting' | 'running' | 'external-running' | 'stopping' | 'stopped' | 'error';
   pid?: number;
   startedAt?: string;
   error?: string;
+  externalSource?: string;
   sessions?: ProcessSession[];
 }
 
