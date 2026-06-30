@@ -6,38 +6,42 @@ import { ErrorBoundary, PageErrorBoundary } from '@/components/ErrorBoundary';
 import { useAppStore } from '@/stores/appStore';
 import { useLocalBootstrap } from '@/hooks/useLocalBootstrap';
 import { OverviewPage } from '@/pages/OverviewPage';
-import { WorkspacePage } from '@/pages/WorkspacePage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
 import { TerminalPage } from '@/pages/TerminalPage';
 import { WebPage } from '@/pages/WebPage';
-import { PortsPage } from '@/pages/PortsPage';
-import { WindowsPage } from '@/pages/WindowsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { GitPage } from '@/pages/GitPage';
 import { HealthPage } from '@/pages/HealthPage';
-import { BackupPage } from '@/pages/BackupPage';
-import { DeployPage } from '@/pages/DeployPage';
-import { TasksPage } from '@/pages/TasksPage';
 import { AboutPage } from '@/pages/AboutPage';
 import { GlobalTaskBar } from '@/components/GlobalTaskBar';
 import { PortConflictDialog } from '@/components/PortConflictDialog';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import type { NavPage } from '@/types/desktop';
 
+const LEGACY_FALLBACK: NavPage[] = [
+  'workspace',
+  'backup',
+  'deploy',
+  'tasks',
+  'ports',
+  'cookies',
+  'windows',
+];
+
 const PAGES: Record<NavPage, React.ComponentType> = {
   overview: OverviewPage,
-  workspace: WorkspacePage,
+  workspace: OverviewPage,
   projects: ProjectsPage,
   git: GitPage,
   health: HealthPage,
-  backup: BackupPage,
-  deploy: DeployPage,
-  tasks: TasksPage,
+  backup: OverviewPage,
+  deploy: OverviewPage,
+  tasks: OverviewPage,
   terminal: TerminalPage,
   web: WebPage,
-  ports: PortsPage,
+  ports: OverviewPage,
   cookies: OverviewPage,
-  windows: WindowsPage,
+  windows: OverviewPage,
   settings: SettingsPage,
   about: AboutPage,
 };
@@ -58,6 +62,10 @@ const PAGE_LABELS: Partial<Record<NavPage, string>> = {
 };
 
 function resolvePage(page: NavPage): React.ComponentType {
+  if (LEGACY_FALLBACK.includes(page)) {
+    console.warn('[App] 旧路由已移除，回退到 overview:', page);
+    return OverviewPage;
+  }
   const Page = PAGES[page];
   if (!Page) {
     console.warn('[App] 未注册页面，回退到 overview:', page);

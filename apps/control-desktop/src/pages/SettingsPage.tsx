@@ -8,6 +8,7 @@ export function SettingsPage() {
   const [cfg, setCfg] = useState<any>({});
   const pushToast = useAppStore((s) => s.pushToast);
   const setPage = useAppStore((s) => s.setPage);
+  const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
 
   useEffect(() => {
     window.zhuboDesktop.config.get().then(setCfg);
@@ -96,16 +97,12 @@ export function SettingsPage() {
         </CardHeader>
         {showAdvanced && (
           <CardContent className="flex flex-wrap gap-2 text-sm">
-            {(
-              [
-                ['ports', '端口'],
-                ['about', '关于'],
-              ] as const
-            ).map(([page, label]) => (
-              <Button key={page} size="sm" variant="secondary" onClick={() => setPage(page)}>
-                {label}
-              </Button>
-            ))}
+            <Button size="sm" variant="secondary" onClick={() => setPortConflictOpen(true)}>
+              端口冲突
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setPage('about')}>
+              关于
+            </Button>
           </CardContent>
         )}
       </Card>

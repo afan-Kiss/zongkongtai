@@ -7,6 +7,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import { filterDisplayProjects } from '@/lib/projectDedup';
+import type { Project } from '@/types/desktop';
 
 type EnrichedProject = Project & { manifestFavorite?: boolean; manifestGroup?: string };
 

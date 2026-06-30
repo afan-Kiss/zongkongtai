@@ -192,7 +192,7 @@ export async function checkGitQuick(
   _projects: unknown[],
   signal?: AbortSignal,
 ): Promise<HealthCheckItem> {
-  void projects;
+  void _projects;
   void signal;
   const cached = getGitSummaryCache();
   if (!cached) {

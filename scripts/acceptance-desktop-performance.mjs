@@ -49,14 +49,9 @@ if (!fs.existsSync(path.join(ELECTRON, 'task-manager.ts'))) {
   failures.push('task-manager.ts missing');
 }
 
-// 4. workday 走 task
+// 4. 关键任务走 TaskManager
 const ipc = read(path.join(ELECTRON, 'ipc.ts'));
-for (const needle of [
-  "startTask('steward:workdayStart'",
-  "startTask('steward:workdayEnd'",
-  "startTask('git:list'",
-  "'steward:healthCheck'",
-]) {
+for (const needle of ["startTask('git:list'", "'steward:healthCheck'"]) {
   if (!ipc.includes(needle)) failures.push(`ipc missing ${needle}`);
 }
 
@@ -75,10 +70,13 @@ if (!preflightEarly.includes('scanLocalPortsAsync(undefined, true)')) {
 
 // 6. App pages + global task bar
 const app = read(path.join(SRC, 'App.tsx'));
-for (const p of ['git:', 'health:', 'backup:', 'deploy:', 'tasks:']) {
+for (const p of ['git:', 'health:', 'settings:', 'overview:']) {
   if (!app.includes(p)) failures.push(`App.tsx missing page ${p}`);
 }
 if (!app.includes('GlobalTaskBar')) failures.push('App.tsx missing GlobalTaskBar');
+if (!app.includes('LEGACY_FALLBACK') && !app.includes('OverviewPage')) {
+  failures.push('App.tsx must fallback legacy routes to OverviewPage');
+}
 
 // 7. Shell nav — 极简 7 项主导航
 const shell = read(path.join(SRC, 'components/layout/Shell.tsx'));
@@ -111,8 +109,11 @@ if (mainNavIds.length !== 7) {
   failures.push(`Shell MAIN_NAV must have exactly 7 items, found ${mainNavIds.length}`);
 }
 const bootstrap = read(path.join(SRC, 'hooks/useLocalBootstrap.ts'));
-if (!bootstrap.includes('projects.loadLocal')) {
-  failures.push('useLocalBootstrap must load local projects on start');
+if (!bootstrap.includes('refreshLocalProjects')) {
+  failures.push('useLocalBootstrap must refresh local projects on start');
+}
+if (bootstrap.includes('portConflictIgnoredIds')) {
+  failures.push('useLocalBootstrap must not depend on portConflictIgnoredIds');
 }
 
 // 8. ProjectCard — 总控自身不在卡片里启停
@@ -174,16 +175,11 @@ const keyIpc = [
   'git:commitPush',
   'git:pull',
   'steward:healthCheck',
-  'steward:workdayStart',
-  'steward:workdayEnd',
   'ports:local',
-  'cloud:ports',
   'ports:analyze',
   'manifest:scanLocal',
   'manifest:import',
   'projects:rescanDisk',
-  'steward:createBackup',
-  'steward:restoreBackup',
 ];
 for (const ch of keyIpc) {
   const re = new RegExp(`ipcPerf\\(\\s*['"]${ch.replace(/:/g, '\\:')}['"]`);
@@ -339,14 +335,6 @@ if (
 }
 if (!gitMgrFull.includes('finalizeGitCommitPaths')) {
   failures.push('git-manager must re-filter paths in finalizeGitCommitPaths before git add');
-}
-
-const cloudClientSrc = read(path.join(ELECTRON, 'cloud-client.ts'));
-if (!cloudClientSrc.includes('clearSession')) {
-  failures.push('cloudClient must expose clearSession');
-}
-if (!read(path.join(ELECTRON, 'ipc.ts')).includes('config:testLogin')) {
-  failures.push('ipc must expose config:testLogin');
 }
 
 if (failures.length) {

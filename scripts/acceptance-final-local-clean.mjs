@@ -49,6 +49,10 @@ if (/cloudClient\.project/.test(ipc)) {
   failures.push('process handlers must not call cloudClient.project');
 }
 
+if (ipc.includes('cloud:')) failures.push('ipc.ts must not register cloud: handlers');
+if (ipc.includes('agent:')) failures.push('ipc.ts must not register agent: handlers');
+if (ipc.includes('workspace:')) failures.push('ipc.ts must not register workspace: handlers');
+
 if (preload.includes('cloud:')) failures.push('preload must not expose cloud API');
 if (preload.includes('secrets')) failures.push('preload must not expose secrets');
 if (preload.includes('agent:')) failures.push('preload must not expose agent API');
@@ -75,6 +79,9 @@ if (bootstrap.includes('ports.analyze') && /setInterval[\s\S]{0,300}ports\.analy
   failures.push('useLocalBootstrap must not periodically ports.analyze');
 }
 if (!bootstrap.includes('60000')) failures.push('useLocalBootstrap should poll external-running every 60s');
+if (/portConflictIgnoredIds/.test(bootstrap)) {
+  failures.push('useLocalBootstrap must not depend on portConflictIgnoredIds');
+}
 
 const navCount = (shell.match(/id:\s*'/g) || []).length;
 if (navCount !== 7) failures.push(`Shell must have 7 nav items, found ${navCount}`);

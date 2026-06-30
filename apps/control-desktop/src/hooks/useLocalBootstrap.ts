@@ -9,8 +9,6 @@ import {
 export { refreshExternalRunning, refreshLocalProjects, refreshPortAnalysis };
 
 export function useLocalBootstrap() {
-  const portConflictIgnoredIds = useAppStore((s) => s.portConflictIgnoredIds);
-
   useEffect(() => {
     const boot = async () => {
       await refreshLocalProjects();
@@ -31,5 +29,5 @@ export function useLocalBootstrap() {
       clearInterval(t);
       offProc();
     };
-  }, [portConflictIgnoredIds]);
+  }, []);
 }

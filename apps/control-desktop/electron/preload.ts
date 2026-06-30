@@ -87,6 +87,7 @@ const api = {
 
   manifest: {
     scanLocal: () => ipcRenderer.invoke('manifest:scanLocal'),
+    import: () => ipcRenderer.invoke('manifest:import'),
     dedupePortsPreview: (localPath: string) =>
       ipcRenderer.invoke('manifest:dedupePortsPreview', localPath),
     dedupePortsApply: (localPath: string) =>

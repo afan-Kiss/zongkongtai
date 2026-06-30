@@ -26,7 +26,8 @@
     "control:acceptance-start-command": "node scripts/acceptance-start-command.mjs",
     "control:acceptance-minimal-local": "node scripts/acceptance-minimal-local.mjs",
     "control:acceptance-local-only": "node scripts/acceptance-local-only.mjs",
-    "control:acceptance-source-format": "node scripts/acceptance-source-format.mjs"
+    "control:acceptance-source-format": "node scripts/acceptance-source-format.mjs",
+    "control:acceptance-full-local-walkthrough": "node scripts/acceptance-full-local-walkthrough.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

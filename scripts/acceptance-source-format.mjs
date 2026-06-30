@@ -40,6 +40,7 @@ const CORE_FILES = [
   'scripts/acceptance-start-command.mjs',
   'scripts/acceptance-overview-no-auto-git.mjs',
   'scripts/acceptance-minimal-local.mjs',
+  'scripts/acceptance-full-local-walkthrough.mjs',
   '.gitattributes',
   '.gitignore',
   'package.json',
@@ -49,6 +50,15 @@ const CORE_FILES = [
 function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
+
+const MIN_LINE_COUNTS = {
+  'apps/control-desktop/electron/ipc.ts': 100,
+  'apps/control-desktop/electron/preload.ts': 50,
+  'apps/control-desktop/src/App.tsx': 40,
+  'apps/control-desktop/src/hooks/useLocalBootstrap.ts': 15,
+  'package.json': 8,
+  'README.md': 15,
+};
 
 const failures = [];
 
@@ -63,6 +73,11 @@ for (const rel of CORE_FILES) {
 
   if (lines.length <= 1 && content.length > 80) {
     failures.push(`${rel} must not be a single-line file`);
+  }
+
+  const minLines = MIN_LINE_COUNTS[rel];
+  if (minLines && lines.length < minLines && content.length > 80) {
+    failures.push(`${rel} must have at least ${minLines} lines (got ${lines.length})`);
   }
 
   if (content.includes('\r\n') || (content.includes('\r') && !content.includes('\n'))) {

@@ -79,8 +79,6 @@ import {
 
 const webViews = new Map<string, BrowserWindow>();
 
-const REMOVED_FEATURE = { ok: false, message: '该功能已移除，总控现在是纯本地工具。' };
-
 function localProjectsList() {
   return enrichProjectsWithManifests(loadLocalProjectsFromManifests() as any[]);
 }
@@ -179,8 +177,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     return { ok: true, message: '本地缓存已重置，请重新扫描项目' };
   });
 
-  ipcMain.handle('config:testLogin', async () => REMOVED_FEATURE);
-
   ipcMain.handle('health:checkUrl', async (_e, url: string) => checkHealthUrl(url));
 
   ipcMain.handle('config:setAutoStart', (_e, enabled: boolean) => {
@@ -194,26 +190,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('config:openLogsDir', () => shell.openPath(getLogDir()));
 
   ipcMain.handle('config:openConfigDir', () => shell.openPath(getConfigDir()));
-
-  ipcMain.handle('cloud:connect', async () => ({
-    ok: true,
-    message: '本地模式',
-    agentsOnline: 0,
-    localProjectCount: loadLocalProjectsFromManifests().length,
-  }));
-
-  ipcMain.handle('cloud:projects', async () => localProjectsList());
-  ipcMain.handle('cloud:project', async (_e, id: string) => {
-    const p = findLocalProjectById(id);
-    if (!p) throw new Error('未找到本地项目');
-    return enrichProjectsWithManifests([p as any])[0];
-  });
-  ipcMain.handle('cloud:healthCheck', async (_e, url: string) => checkHealthUrl(url));
-  ipcMain.handle('cloud:ports', async () => REMOVED_FEATURE);
-  ipcMain.handle('cloud:secrets', async () => REMOVED_FEATURE);
-  ipcMain.handle('cloud:dashboard', async () => REMOVED_FEATURE);
-  ipcMain.handle('cloud:agents', async () => REMOVED_FEATURE);
-  ipcMain.handle('cloud:openSecretsPage', async () => REMOVED_FEATURE);
 
   ipcMain.handle('projects:loadLocal', () => {
     const local = loadLocalProjectsFromManifests();
@@ -435,9 +411,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     }
   });
 
-  ipcMain.handle('workspace:list', async () => REMOVED_FEATURE);
-  ipcMain.handle('workspace:run', async () => REMOVED_FEATURE);
-
   ipcMain.handle('webview:open', (_e, { id, url }: { id: string; url: string }) => {
     const safeUrl = assertAllowedExternalUrl(url);
     const existing = webViews.get(id);
@@ -532,14 +505,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   );
 
   ipcMain.handle('project:webUrl', (_e, project: any) => inferWebUrl(project));
-
-  ipcMain.handle('agent:status', async () => REMOVED_FEATURE);
-  ipcMain.handle('agent:refresh', async () => REMOVED_FEATURE);
-  ipcMain.handle('agent:start', async () => REMOVED_FEATURE);
-  ipcMain.handle('agent:stop', async () => REMOVED_FEATURE);
-  ipcMain.handle('agent:restart', async () => REMOVED_FEATURE);
-  ipcMain.handle('agent:ensure', async () => REMOVED_FEATURE);
-  ipcMain.handle('agent:openLog', async () => REMOVED_FEATURE);
 
   ipcPerf('manifest:scanLocal', () => {
     const root = getScanRoot();
@@ -665,14 +630,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcMain.handle('steward:repair', (_e, action: string) => runHealthRepair(action));
-
-  ipcMain.handle('steward:workdayStart', async () => REMOVED_FEATURE);
-  ipcMain.handle('steward:workdayEnd', async () => REMOVED_FEATURE);
-  ipcMain.handle('steward:backups', async () => REMOVED_FEATURE);
-  ipcMain.handle('steward:createBackup', async () => REMOVED_FEATURE);
-  ipcMain.handle('steward:restoreBackup', async () => REMOVED_FEATURE);
-  ipcMain.handle('steward:deployments', async () => REMOVED_FEATURE);
-  ipcMain.handle('steward:tasks', async () => REMOVED_FEATURE);
 
   ipcMain.handle('tasks:list', () => taskManager.list());
   ipcMain.handle('tasks:get', (_e, id: string) => taskManager.get(id));
