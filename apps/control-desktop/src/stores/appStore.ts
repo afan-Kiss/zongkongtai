@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { deduplicateProjects } from '@/lib/projectDedup';
 import type { AgentStatus, NavPage, ProcessInfo, Project, ToastItem } from '@/types/desktop';
 
 interface AppState {
@@ -61,7 +62,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       agentStatus,
       agentsOnline: agentStatus?.cloudOnline ? 1 : 0,
     }),
-  setProjects: (projects) => set({ projects }),
+  setProjects: (projects) => set({ projects: deduplicateProjects(projects) }),
   selectProject: (id) => set({ selectedProjectId: id }),
   setProcess: (proc) =>
     set((s) => {

@@ -51,7 +51,8 @@ export function OverviewPage() {
         window.zhuboDesktop.steward.healthCheck(),
       )) as HealthCheckReport;
       sessionStorage.setItem(HEALTH_CACHE_KEY, JSON.stringify(result));
-      pushToast('success', `体检完成：${result.summary.error} 项异常`);
+      const err = result?.summary?.error ?? 0;
+      pushToast('success', `体检完成：${err} 项异常`);
       setPage('health');
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
@@ -65,14 +66,14 @@ export function OverviewPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">总览</h1>
-          <p className="text-sm text-muted-foreground">日常项目 · 一键刷新 · 简单体检</p>
+          <p className="text-sm text-muted-foreground">常用 6 个项目 · 刷新状态 · 简单体检</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={refresh} disabled={refreshing}>
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> 刷新状态
           </Button>
           <Button onClick={quickHealth} disabled={healthBusy}>
-            <Activity className={`h-4 w-4 ${healthBusy ? 'animate-pulse' : ''}`} /> 一键体检
+            <Activity className={`h-4 w-4 ${healthBusy ? 'animate-pulse' : ''}`} /> 开始简单体检
           </Button>
         </div>
       </div>

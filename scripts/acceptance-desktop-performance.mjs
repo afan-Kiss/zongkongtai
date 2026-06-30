@@ -80,15 +80,29 @@ for (const p of ['git:', 'health:', 'backup:', 'deploy:', 'tasks:']) {
 }
 if (!app.includes('GlobalTaskBar')) failures.push('App.tsx missing GlobalTaskBar');
 
-// 7. Shell nav — 简洁主导航
+// 7. Shell nav — 极简 8 项主导航
 const shell = read(path.join(SRC, 'components/layout/Shell.tsx'));
-for (const label of ['总览', '项目', 'Git 上传', '简单体检', '终端', '端口', 'Cookie', '设置']) {
+const mainNavRequired = ['总览', '项目', 'Git 上传', '简单体检', '终端', 'Web 页面', 'Cookie', '设置'];
+for (const label of mainNavRequired) {
   if (!shell.includes(label)) failures.push(`Shell missing ${label}`);
 }
-if (shell.includes("label: '备份回滚'") || shell.includes('label: \'备份回滚\'')) {
-  if (/MAIN_NAV[\s\S]*备份回滚/.test(shell)) {
-    failures.push('备份回滚不应出现在主导航');
-  }
+const mainNavForbidden = ['工作区', '备份回滚', '部署记录', '后台任务', '窗口管理', '端口', '关于'];
+for (const label of mainNavForbidden) {
+  const inMainNav = new RegExp(`MAIN_NAV[\\s\\S]*label:\\s*['"]${label}['"]`).test(shell);
+  if (inMainNav) failures.push(`Shell MAIN_NAV must not include ${label}`);
+}
+if (shell.includes('提醒') || /warningCount/.test(shell)) {
+  failures.push('TopBar must not show unreadable reminder badge');
+}
+
+// 7b. appStore global dedupe
+const appStore = read(path.join(SRC, 'stores/appStore.ts'));
+if (!appStore.includes('deduplicateProjects')) {
+  failures.push('appStore.setProjects must deduplicateProjects');
+}
+const bootstrap = read(path.join(SRC, 'hooks/useCloudBootstrap.ts'));
+if (!bootstrap.includes('deduplicateProjects')) {
+  failures.push('useCloudBootstrap must deduplicateProjects before setProjects');
 }
 
 // 8. ProjectCard protected hides start/stop/restart
@@ -102,17 +116,17 @@ if (!card.includes('{!isProtected && (')) {
 
 // 9. HealthPage — manual start, no auto heavy check on mount
 const healthPage = read(path.join(SRC, 'pages/HealthPage.tsx'));
-if (!healthPage.includes('开始体检') || !healthPage.includes('简单体检')) {
+if (!healthPage.includes('开始简单体检') || !healthPage.includes('简单体检')) {
   failures.push('HealthPage must be simple health with manual start button');
 }
-if (/useEffect\(\(\) => \{\s*loadLight\(\)/.test(healthPage)) {
+if (/useEffect\(\(\) => \{\s*(loadLight|healthCheckLight)\(/.test(healthPage)) {
   failures.push('HealthPage should not auto-run loadLight on mount');
 }
 
 // 10. OverviewPage simplified actions
 const overview = read(path.join(SRC, 'pages/OverviewPage.tsx'));
-if (!overview.includes('刷新状态') || !overview.includes('一键体检')) {
-  failures.push('OverviewPage must have refresh and quick health buttons');
+if (!overview.includes('刷新状态') || !overview.includes('开始简单体检')) {
+  failures.push('OverviewPage must have refresh and simple health buttons');
 }
 if (overview.includes('今日开工') || overview.includes('今日收工')) {
   failures.push('OverviewPage must not show workday start/end');
@@ -220,6 +234,9 @@ const gitPage = read(path.join(SRC, 'pages/GitPage.tsx'));
 if (!gitPage.includes('一键上传')) {
   failures.push('GitPage must show one-click upload on project cards');
 }
+if (!/项目卡片|每个项目卡片/.test(gitPage)) {
+  failures.push('GitPage should document card-level upload buttons');
+}
 if (!gitPage.includes('shell.openGithub')) {
   failures.push('GitPage must use shell.openGithub');
 }
@@ -276,10 +293,15 @@ if (!mainTs.includes('buildStopAllProjects')) {
   failures.push('main.ts must pass projects to stopAll');
 }
 
+const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
+if (!pkg.scripts?.['pack:desktop:clean']) {
+  failures.push('package.json missing pack:desktop:clean script');
+}
+
 if (failures.length) {
   console.error('FAIL desktop performance acceptance:');
   for (const f of failures) console.error(' -', f);
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checks: 25 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: 30 }, null, 2));

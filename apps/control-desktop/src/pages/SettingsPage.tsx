@@ -158,6 +158,8 @@ export function SettingsPage() {
                 ['tasks', '后台任务'],
                 ['workspace', '工作区'],
                 ['windows', '窗口管理'],
+                ['ports', '端口'],
+                ['about', '关于'],
               ] as const
             ).map(([page, label]) => (
               <Button

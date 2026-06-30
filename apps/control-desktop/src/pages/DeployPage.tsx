@@ -8,6 +8,7 @@ import { CloudGate } from '@/components/CloudGate';
 
 export function DeployPage() {
   const pushToast = useAppStore((s) => s.pushToast);
+  const cloudConnected = useAppStore((s) => s.cloudConnected);
   const setPage = useAppStore((s) => s.setPage);
   const [rows, setRows] = useState<DeploymentRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -24,8 +25,9 @@ export function DeployPage() {
   }, [pushToast]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!cloudConnected) return;
+    void refresh();
+  }, [cloudConnected, refresh]);
 
   return (
     <CloudGate title="部署记录（高级工具）">

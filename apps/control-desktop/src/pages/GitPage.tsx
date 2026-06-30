@@ -17,6 +17,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { SkeletonRow } from '@/components/TaskProgressPanel';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
+import { GIT_UNPUSHED_CACHE_KEY } from '@/lib/projectDedup';
 
 const STATE_LABEL: Record<
   string,
@@ -32,10 +33,8 @@ const STATE_LABEL: Record<
   no_remote: { label: '无远端', variant: 'muted' },
 };
 
-function defaultCommitMessage(row: GitProjectStatus): string {
-  if (row.state === 'dirty' || row.hasUncommitted) return 'fix: update project changes';
-  if (row.hasUnpushed || row.state === 'unpushed') return 'chore: sync local changes';
-  return 'chore: update control integration';
+function defaultCommitMessage(): string {
+  return 'chore: update project changes';
 }
 
 export function GitPage() {
@@ -71,6 +70,16 @@ export function GitPage() {
         )) as GitProjectStatus[];
         if (!Array.isArray(results)) throw new Error('Git 列表格式异常，请重试');
         setRows(results);
+        const unpushed = results.filter(
+          (r) =>
+            r.hasUnpushed ||
+            r.hasUncommitted ||
+            r.state === 'unpushed' ||
+            r.state === 'dirty' ||
+            r.state === 'behind' ||
+            r.state === 'needs_pull',
+        ).length;
+        sessionStorage.setItem(GIT_UNPUSHED_CACHE_KEY, String(unpushed));
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setLoadError(msg);
@@ -93,7 +102,7 @@ export function GitPage() {
       return;
     }
     setUploadTarget(row);
-    setCommitMsg(defaultCommitMessage(row));
+    setCommitMsg(defaultCommitMessage());
   };
 
   const doCommitPush = async (row: GitProjectStatus, pushOnly = false) => {
@@ -106,7 +115,7 @@ export function GitPage() {
       const r = (await runTask(() =>
         window.zhuboDesktop.git.commitPush({
           localPath: row.localPath,
-          message: commitMsg || defaultCommitMessage(row),
+          message: commitMsg || defaultCommitMessage(),
           paths: row.safeToCommitPaths,
           pushOnly,
         }),
@@ -197,11 +206,10 @@ export function GitPage() {
                   )}
                   <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button
-                      size="sm"
                       disabled={busy || row.state === 'no_git'}
                       onClick={(e) => openUpload(row, e)}
                     >
-                      <Upload className="h-3 w-3" /> 一键上传
+                      <Upload className="h-4 w-4" /> 一键上传
                     </Button>
                     <Button
                       size="sm"
@@ -257,11 +265,18 @@ export function GitPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-semibold">一键上传 — {uploadTarget.projectName}</h3>
+                <h3 className="font-semibold">确认上传到 GitHub — {uploadTarget.projectName}</h3>
                 <button type="button" onClick={() => setUploadTarget(null)} aria-label="关闭">
                   <X className="h-4 w-4" />
                 </button>
               </div>
+              <p className="mb-3 text-sm text-muted-foreground">
+                将要提交{' '}
+                {uploadTarget.changes.filter((c) => !c.blocked).length ||
+                  uploadTarget.safeToCommitPaths?.length ||
+                  0}{' '}
+                个文件 · 已拦截 {uploadTarget.blockedPaths.length} 个敏感文件
+              </p>
               <textarea
                 className="mb-3 w-full rounded-md border border-border bg-background/50 p-3 text-sm"
                 rows={2}

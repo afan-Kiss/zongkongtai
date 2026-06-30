@@ -16,6 +16,7 @@ const TASK_LABEL: Record<string, string> = {
 
 export function TasksPage() {
   const pushToast = useAppStore((s) => s.pushToast);
+  const cloudConnected = useAppStore((s) => s.cloudConnected);
   const [tasks, setTasks] = useState<StewardTaskItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -31,8 +32,9 @@ export function TasksPage() {
   }, [pushToast]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!cloudConnected) return;
+    void refresh();
+  }, [cloudConnected, refresh]);
 
   return (
     <CloudGate title="后台任务（高级工具）">

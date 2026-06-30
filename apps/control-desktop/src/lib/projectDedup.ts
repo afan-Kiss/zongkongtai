@@ -1,6 +1,6 @@
 import type { Project } from '@/types/desktop';
 
-/** 总览日常常用项目（按名称包含匹配） */
+/** 总览日常常用项目（按名称包含匹配，各取一条） */
 export const DAILY_PROJECT_KEYWORDS = [
   '扫码枪登记出入库',
   '记账系统',
@@ -15,7 +15,7 @@ function dedupKey(p: Project): string {
   if (code && !code.includes('probe')) return `code:${code}`;
   const path = (p.localPath || '').trim().toLowerCase();
   if (path) return `path:${path}`;
-  return `name:${p.name.trim().toLowerCase()}::${path || p.id}`;
+  return `name:${p.name.trim().toLowerCase()}`;
 }
 
 function scoreProject(p: Project): number {
@@ -32,10 +32,16 @@ function scoreProject(p: Project): number {
 function isProbeOrStale(p: Project): boolean {
   const code = (p.code || '').toLowerCase();
   const name = p.name.toLowerCase();
-  return code.includes('probe') || name.includes('probe') || name.includes('(旧)');
+  return (
+    code.includes('probe') ||
+    name.includes('probe') ||
+    name.includes('(旧)') ||
+    name.includes('历史') ||
+    code.endsWith('-old')
+  );
 }
 
-/** 按 code / localPath / name 去重，保留信息更完整的一条 */
+/** 按 code → localPath → name 去重，保留信息更完整的一条 */
 export function deduplicateProjects(projects: Project[]): Project[] {
   const best = new Map<string, Project>();
   for (const p of projects) {
@@ -62,7 +68,7 @@ export function dailyFeaturedProjects(projects: Project[]): Project[] {
     const match = filtered.find((p) => p.name.includes(kw));
     if (match && !picked.some((x) => x.id === match.id)) picked.push(match);
   }
-  return picked;
+  return picked.slice(0, 6);
 }
 
 export function formatPortList(ports: Project['ports'], max = 3): string {
@@ -82,9 +88,10 @@ export function findDuplicateGroups(projects: Project[]): string[] {
   const byName = new Map<string, number>();
   for (const p of projects) {
     const k = p.name.trim();
+    if (!k) continue;
     byName.set(k, (byName.get(k) || 0) + 1);
   }
-  return [...byName.entries()]
-    .filter(([, n]) => n > 1)
-    .map(([name, n]) => `${name}（${n} 条重复）`);
+  return [...byName.entries()].filter(([, n]) => n > 1).map(([name, n]) => `${name}（${n} 条）`);
 }
+
+export const GIT_UNPUSHED_CACHE_KEY = 'zhubo:gitUnpushedCount';

@@ -14,6 +14,7 @@ function fmtSize(n: number) {
 
 export function BackupPage() {
   const pushToast = useAppStore((s) => s.pushToast);
+  const cloudConnected = useAppStore((s) => s.cloudConnected);
   const [backups, setBackups] = useState<BackupRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,8 +32,9 @@ export function BackupPage() {
   }, [pushToast]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!cloudConnected) return;
+    void refresh();
+  }, [cloudConnected, refresh]);
 
   const createBackup = async () => {
     if (!confirm('立即备份总控生产数据库 prod.db？')) return;

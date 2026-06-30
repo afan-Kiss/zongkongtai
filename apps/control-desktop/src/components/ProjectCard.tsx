@@ -21,7 +21,7 @@ import {
   normalizeRiskLevel,
   riskRequiresConfirm,
 } from '@zhubo/control-shared';
-import { formatPortList, findDuplicateGroups } from '@/lib/projectDedup';
+import { formatPortList, findDuplicateGroups, GIT_UNPUSHED_CACHE_KEY } from '@/lib/projectDedup';
 
 const RISK_LABEL: Record<string, string> = {
   low: '低风险',
@@ -271,6 +271,12 @@ export function RightPanel() {
   );
   const [checking, setChecking] = useState(false);
   const [webUrl, setWebUrl] = useState<string | null>(null);
+  const [gitUnpushed, setGitUnpushed] = useState(0);
+
+  useEffect(() => {
+    const n = sessionStorage.getItem(GIT_UNPUSHED_CACHE_KEY);
+    setGitUnpushed(n ? parseInt(n, 10) || 0 : 0);
+  }, [selectedId, projects.length]);
 
   useEffect(() => {
     setHealth(null);
@@ -301,6 +307,9 @@ export function RightPanel() {
               : '暂无记录'}
           </li>
           {dupes.length > 0 && <li>· 重复项目：{dupes.length} 组</li>}
+          <li>
+            · Git 未上传：{gitUnpushed} 个{gitUnpushed > 0 ? '，建议到「Git 上传」处理' : ''}
+          </li>
         </ul>
         <div className="flex flex-col gap-2">
           <Button size="sm" variant="secondary" onClick={() => setPage('git')}>
