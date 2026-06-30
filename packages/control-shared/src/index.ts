@@ -26,7 +26,7 @@ export type {
   ProjectGroup,
 } from './manifest';
 export type { ManifestValidationResult } from './manifestValidate';
-export { scanManifestsUnderRoot } from './manifestFsScan';
+export { scanManifestsUnderRoot, listAllManifestEntries } from './manifestFsScan';
 export type { ScanManifestsResult } from './manifestFsScan';
 export {
   QIANFAN_CANONICAL_SHOPS,

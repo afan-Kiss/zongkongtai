@@ -104,3 +104,53 @@ export function scanManifestsUnderRoot(basePath: string, maxDepth = 4): ScanMani
 
   return { manifests: picked, warnings };
 }
+
+/** 递归列出所有 manifest 条目（Git 扫描用，同 code 多路径均保留） */
+export function listAllManifestEntries(basePath: string, maxDepth = 4): ScanManifestsResult {
+  const entries: ScannedManifestEntry[] = [];
+  const warnings: string[] = [];
+
+  if (!fs.existsSync(basePath)) return { manifests: [], warnings: ['扫描根目录不存在'] };
+
+  const walk = (dir: string, depth: number) => {
+    const m = readManifestAt(dir);
+    if (m) {
+      entries.push({ manifest: { ...m, localPath: m.localPath || dir }, dir, depth });
+    }
+    if (depth >= maxDepth) return;
+    let children: fs.Dirent[];
+    try {
+      children = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of children) {
+      if (!ent.isDirectory() || SKIP_DIRS.has(ent.name)) continue;
+      walk(path.join(dir, ent.name), depth + 1);
+    }
+  };
+
+  for (const ent of fs.readdirSync(basePath, { withFileTypes: true })) {
+    if (!ent.isDirectory() || SKIP_DIRS.has(ent.name)) continue;
+    walk(path.join(basePath, ent.name), 0);
+  }
+
+  const byCode = new Map<string, ScannedManifestEntry[]>();
+  for (const e of entries) {
+    const list = byCode.get(e.manifest.code) || [];
+    list.push(e);
+    byCode.set(e.manifest.code, list);
+  }
+  for (const [code, list] of byCode) {
+    if (list.length > 1) {
+      warnings.push(
+        `code「${code}」在 ${list.length} 处 manifest：${list.map((x) => x.dir).join('；')}`,
+      );
+    }
+  }
+
+  return {
+    manifests: entries.map((e) => e.manifest),
+    warnings,
+  };
+}

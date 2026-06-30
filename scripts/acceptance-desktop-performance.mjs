@@ -27,9 +27,7 @@ const failures = [];
 
 // 1. 禁止 sync exec 于 git/port/health 核心文件
 const syncForbidden = walkTs(ELECTRON).filter(
-  (f) =>
-    !f.endsWith('config.ts') &&
-    !f.endsWith('async-exec.ts'),
+  (f) => !f.endsWith('config.ts') && !f.endsWith('async-exec.ts'),
 );
 for (const file of syncForbidden) {
   const content = read(file);
@@ -66,11 +64,17 @@ for (const needle of [
 const portMgr = read(path.join(ELECTRON, 'port-manager.ts'));
 if (!portMgr.includes('scanLocalPortsAsync')) failures.push('port-manager missing scanLocalPortsAsync');
 
-// 6. App pages
+const procMgr = read(path.join(ELECTRON, 'process-manager.ts'));
+if (!procMgr.includes('isPortListeningAsync')) {
+  failures.push('process-manager preflight must use isPortListeningAsync');
+}
+
+// 6. App pages + global task bar
 const app = read(path.join(SRC, 'App.tsx'));
 for (const p of ['git:', 'health:', 'backup:', 'deploy:', 'tasks:']) {
   if (!app.includes(p)) failures.push(`App.tsx missing page ${p}`);
 }
+if (!app.includes('GlobalTaskBar')) failures.push('App.tsx missing GlobalTaskBar');
 
 // 7. Shell nav
 const shell = read(path.join(SRC, 'components/layout/Shell.tsx'));
@@ -78,10 +82,13 @@ for (const label of ['Git 上传', '系统体检', '备份回滚', '部署记录
   if (!shell.includes(label)) failures.push(`Shell missing ${label}`);
 }
 
-// 8. ProjectCard riskLevel
+// 8. ProjectCard protected hides start/stop/restart
 const card = read(path.join(SRC, 'components/ProjectCard.tsx'));
 if (!card.includes('riskRequiresConfirm') || !card.includes('protected')) {
   failures.push('ProjectCard missing riskLevel gates');
+}
+if (!card.includes('{!isProtected && (')) {
+  failures.push('ProjectCard protected must hide start/stop/restart buttons');
 }
 
 // 9. HealthPage no auto full on mount
@@ -96,9 +103,13 @@ if (!read(path.join(SRC, 'pages/OverviewPage.tsx')).includes('workdayBusy')) {
   failures.push('OverviewPage missing workday inFlight guard');
 }
 
-// 11. forbidden url — gitRemote excluded
+// 11. forbidden url — gitRemote allowed, runtime blocks github https
 const forbidden = read(path.join(ELECTRON, 'forbidden-url.ts'));
-if (!forbidden.includes('github.com')) failures.push('forbidden-url should allow github.com');
+if (!forbidden.includes('GIT_REMOTE_KEYS')) failures.push('forbidden-url missing GIT_REMOTE_KEYS');
+if (!forbidden.includes('gitRemote')) failures.push('forbidden-url should allow gitRemote github');
+if (!forbidden.includes('https://github.com')) {
+  failures.push('forbidden-url should reference github.com block for runtime');
+}
 const healthCheck = read(path.join(ELECTRON, 'health-check.ts'));
 if (!healthCheck.includes('scanManifestFileForbidden')) {
   failures.push('health-check should use scanManifestFileForbidden');
@@ -107,8 +118,76 @@ if (healthCheck.includes('FORBIDDEN_DOMAIN_RE')) {
   failures.push('health-check still uses FORBIDDEN_DOMAIN_RE whole-file scan');
 }
 
-// 12. ipc perf
+// 12. ipc perf wrap on key handlers
 if (!fs.existsSync(path.join(ELECTRON, 'ipc-perf.ts'))) failures.push('ipc-perf.ts missing');
+const keyIpc = [
+  'git:list',
+  'git:commitPush',
+  'git:pull',
+  'steward:healthCheck',
+  'steward:workdayStart',
+  'steward:workdayEnd',
+  'ports:local',
+  'cloud:ports',
+  'manifest:scanLocal',
+  'manifest:import',
+  'projects:rescanDisk',
+  'steward:createBackup',
+  'steward:restoreBackup',
+];
+for (const ch of keyIpc) {
+  const re = new RegExp(`ipcPerf\\(\\s*['"]${ch.replace(/:/g, '\\:')}['"]`);
+  if (!re.test(ipc)) {
+    failures.push(`ipc.ts missing ipcPerf wrap for ${ch}`);
+  }
+}
+
+// 13. git commit/push dedup key matches task type
+if (!ipc.includes('const taskType = `git:commitPush:${opts.localPath}`')) {
+  failures.push('git:commitPush task type must include localPath');
+}
+if (!ipc.includes('const taskType = `git:pull:${localPath}`')) {
+  failures.push('git:pull task type must include localPath');
+}
+if (!ipc.includes('这个 Git 操作正在进行中，请稍等。')) {
+  failures.push('git duplicate guard message missing');
+}
+
+// 14. process:stop risk enforcement
+if (!ipc.includes('resolveProjectForRisk')) {
+  failures.push('process:stop must resolve project for risk');
+}
+if (!ipc.includes("assertRiskAllowed(payload, 'stop')")) {
+  failures.push('process:stop must assertRiskAllowed');
+}
+
+// 15. useTaskRunner taskId scope
+const taskRunner = read(path.join(SRC, 'hooks/useTaskRunner.ts'));
+if (!taskRunner.includes('activeIdRef')) {
+  failures.push('useTaskRunner must track own taskId');
+}
+if (!taskRunner.includes('if (!isCurrent(t)) return')) {
+  failures.push('useTaskRunner must ignore other task events');
+}
+
+// 16. git:list no default --ignored
+if (gitMgr.includes("['status', '--porcelain', '--ignored']") && gitMgr.includes('getGitStatusForPath')) {
+  const statusFn = gitMgr.slice(
+    gitMgr.indexOf('export async function getGitStatusForPath'),
+    gitMgr.indexOf('export async function countGitIgnoredFiles'),
+  );
+  if (statusFn.includes('--ignored')) {
+    failures.push('git:list getGitStatusForPath must not run --ignored by default');
+  }
+}
+if (!gitMgr.includes('countGitIgnoredFiles')) {
+  failures.push('git-manager missing countGitIgnoredFiles');
+}
+
+// 17. recursive manifest scan for git projects
+if (!gitMgr.includes('listAllManifestEntries')) {
+  failures.push('collectGitProjects must use listAllManifestEntries');
+}
 
 if (failures.length) {
   console.error('FAIL desktop performance acceptance:');
@@ -116,4 +195,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checks: 12 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: 17 }, null, 2));

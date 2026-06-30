@@ -5,7 +5,7 @@ import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import treeKill from 'tree-kill';
 import pidusage from 'pidusage';
 import { sanitizeLogChunk } from './sanitize';
-import { isPortListening, resolveStartCommand } from './port-manager';
+import { isPortListeningAsync, invalidatePortCache, resolveStartCommand } from './port-manager';
 import { fileLog } from './file-logger';
 import { assertRiskAllowed } from './ipc-security';
 
@@ -240,7 +240,20 @@ export class ProcessManager extends EventEmitter {
       .slice(0, 5);
 
     for (const port of listenerPorts) {
-      const occ = isPortListening(port);
+      invalidatePortCache();
+      let occ;
+      try {
+        occ = await isPortListeningAsync(port, undefined, true);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/超时|timeout/i.test(msg)) {
+          return {
+            ok: false,
+            message: '端口检查超时，为避免误启动，请稍后重试。',
+          };
+        }
+        return { ok: false, message: msg.slice(0, 200) };
+      }
       if (!occ) continue;
       const sameProjectRunning = this.processes.get(project.id)?.status === 'running';
       if (sameProjectRunning) {

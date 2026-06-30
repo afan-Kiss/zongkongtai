@@ -5,7 +5,6 @@ import type { HealthCheckItem, HealthCheckReport } from '@zhubo/control-shared';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { TaskProgressPanel } from '@/components/TaskProgressPanel';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
 
@@ -32,7 +31,7 @@ export function HealthPage() {
   const [loadingLight, setLoadingLight] = useState(false);
   const [fullRunning, setFullRunning] = useState(false);
   const [repairing, setRepairing] = useState<string | null>(null);
-  const { active, runTask, cancel } = useTaskRunner();
+  const { runTask } = useTaskRunner();
 
   const loadLight = useCallback(async () => {
     setLoadingLight(true);
@@ -91,7 +90,6 @@ export function HealthPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <TaskProgressPanel task={active} onCancel={cancel} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">

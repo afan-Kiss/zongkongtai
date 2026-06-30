@@ -4,7 +4,6 @@ import { Sun, Moon, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { ProjectCard } from '@/components/ProjectCard';
-import { TaskProgressPanel } from '@/components/TaskProgressPanel';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
 import { qianfanCookieMessage } from '@/hooks/useCloudBootstrap';
@@ -18,7 +17,7 @@ export function OverviewPage() {
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
   const pushToast = useAppStore((s) => s.pushToast);
   const setPage = useAppStore((s) => s.setPage);
-  const { active, runTask, cancel } = useTaskRunner();
+  const { runTask } = useTaskRunner();
   const [workdayBusy, setWorkdayBusy] = useState<'start' | 'end' | null>(null);
 
   const refresh = async () => {
@@ -81,7 +80,6 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <TaskProgressPanel task={active} onCancel={cancel} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">总览</h1>

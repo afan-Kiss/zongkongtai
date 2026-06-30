@@ -45,8 +45,11 @@ async function buildProcessMap(signal?: AbortSignal): Promise<Map<number, string
   return map;
 }
 
-export async function scanLocalPortsAsync(signal?: AbortSignal): Promise<LocalPortInfo[]> {
-  if (cachedPorts && Date.now() - cachedPorts.at < CACHE_TTL_MS) {
+export async function scanLocalPortsAsync(
+  signal?: AbortSignal,
+  forceRefresh = false,
+): Promise<LocalPortInfo[]> {
+  if (!forceRefresh && cachedPorts && Date.now() - cachedPorts.at < CACHE_TTL_MS) {
     return cachedPorts.data;
   }
 
@@ -61,6 +64,9 @@ export async function scanLocalPortsAsync(signal?: AbortSignal): Promise<LocalPo
       signal,
       label: 'netstat',
     });
+    if (r.timedOut) {
+      throw new Error('端口检查超时');
+    }
     if (r.code !== 0) return result;
 
     const seen = new Set<number>();
@@ -79,7 +85,8 @@ export async function scanLocalPortsAsync(signal?: AbortSignal): Promise<LocalPo
         protocol: 'tcp',
       });
     }
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && /超时|timeout/i.test(e.message)) throw e;
     /* ignore */
   }
 
@@ -91,8 +98,9 @@ export async function scanLocalPortsAsync(signal?: AbortSignal): Promise<LocalPo
 export async function isPortListeningAsync(
   port: number,
   signal?: AbortSignal,
+  forceRefresh = false,
 ): Promise<LocalPortInfo | undefined> {
-  const ports = await scanLocalPortsAsync(signal);
+  const ports = await scanLocalPortsAsync(signal, forceRefresh);
   return ports.find((p) => p.port === port);
 }
 

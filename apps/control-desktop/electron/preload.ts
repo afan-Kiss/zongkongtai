@@ -133,6 +133,7 @@ const api = {
     status: (opts: unknown) => ipcRenderer.invoke('git:status', opts),
     commitPush: (opts: unknown) => ipcRenderer.invoke('git:commitPush', opts),
     pull: (localPath: string) => ipcRenderer.invoke('git:pull', localPath),
+    ignoredCount: (localPath: string) => ipcRenderer.invoke('git:ignoredCount', localPath),
     githubUrl: (remote?: string) => ipcRenderer.invoke('git:githubUrl', remote),
   },
 

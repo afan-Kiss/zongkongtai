@@ -15,7 +15,7 @@ import type { GitProjectStatus } from '@zhubo/control-shared';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, Badge } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { TaskProgressPanel, SkeletonRow } from '@/components/TaskProgressPanel';
+import { SkeletonRow } from '@/components/TaskProgressPanel';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
 
@@ -41,7 +41,8 @@ export function GitPage() {
   const [selected, setSelected] = useState<GitProjectStatus | null>(null);
   const [commitMsg, setCommitMsg] = useState('');
   const [busy, setBusy] = useState(false);
-  const { active, runTask, cancel } = useTaskRunner();
+  const [ignoredLoading, setIgnoredLoading] = useState(false);
+  const { runTask } = useTaskRunner();
 
   useEffect(() => {
     const off = window.zhuboDesktop.tasks.onProgress((task) => {
@@ -108,7 +109,6 @@ export function GitPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <TaskProgressPanel task={active} onCancel={cancel} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
@@ -282,6 +282,31 @@ export function GitPage() {
                 ))}
               </div>
             )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                ignored 文件：
+                {selected.ignoredCount > 0 ? selected.ignoredCount : '未统计'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={ignoredLoading}
+                onClick={async () => {
+                  setIgnoredLoading(true);
+                  try {
+                    const r = await window.zhuboDesktop.git.ignoredCount(selected.localPath);
+                    if (r.ok) {
+                      setSelected({ ...selected, ignoredCount: r.ignoredCount });
+                      pushToast('success', `ignored 文件共 ${r.ignoredCount} 个`);
+                    } else pushToast('error', r.error || '统计失败');
+                  } finally {
+                    setIgnoredLoading(false);
+                  }
+                }}
+              >
+                {ignoredLoading ? '统计中…' : '统计 ignored 文件'}
+              </Button>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 disabled={busy || selected.state === 'no_git'}

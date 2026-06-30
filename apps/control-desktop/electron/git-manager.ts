@@ -14,6 +14,7 @@ import {
   DEFAULT_RISK_BY_CODE,
 } from '../../../packages/control-shared/src/steward';
 import { readProjectManifest, getScanRoot } from './manifest-scanner';
+import { listAllManifestEntries } from '../../../packages/control-shared/src/manifestFsScan';
 import { runGit } from './async-exec';
 import { fileLog } from './file-logger';
 
@@ -126,15 +127,6 @@ export async function getGitStatusForPath(
     const deletedCount = changes.filter((c) => /D/.test(c.status)).length;
 
     let ignoredCount = 0;
-    try {
-      const ign = await runGit(localPath, ['status', '--porcelain', '--ignored'], {
-        timeoutMs: GIT_TIMEOUT_MS,
-        signal,
-      });
-      ignoredCount = ign.split(/\r?\n/).filter((l) => l.startsWith('!!')).length;
-    } catch {
-      /* ignore */
-    }
 
     const changePaths = changes.map((c) => c.path);
     const { safe, blocked } = filterGitPaths(changePaths);
@@ -231,6 +223,31 @@ export async function getGitStatusForPath(
   }
 }
 
+export async function countGitIgnoredFiles(
+  localPath: string,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; ignoredCount: number; error?: string }> {
+  if (!localPath || !fs.existsSync(localPath) || !hasGitRepo(localPath)) {
+    return { ok: false, ignoredCount: 0, error: '没有 Git 仓库' };
+  }
+  try {
+    const ign = await runGit(localPath, ['status', '--porcelain', '--ignored'], {
+      timeoutMs: 15000,
+      signal,
+      label: 'status ignored',
+    });
+    const ignoredCount = ign.split(/\r?\n/).filter((l) => l.startsWith('!!')).length;
+    return { ok: true, ignoredCount };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      ignoredCount: 0,
+      error: /超时|timeout/i.test(msg) ? '统计 ignored 超时' : msg.slice(0, 200),
+    };
+  }
+}
+
 export function collectGitProjects(
   projects: Array<{
     code: string;
@@ -262,13 +279,21 @@ export function collectGitProjects(
 
   const scanRoot = getScanRoot();
   if (scanRoot && fs.existsSync(scanRoot)) {
-    for (const ent of fs.readdirSync(scanRoot, { withFileTypes: true })) {
-      if (!ent.isDirectory()) continue;
-      const dir = path.join(scanRoot, ent.name);
-      const manifest = readProjectManifest(dir);
-      if (!manifest) continue;
+    const { manifests, warnings } = listAllManifestEntries(scanRoot);
+    for (const w of warnings) {
+      fileLog.app(`[git-scan] ${w}`, 'warn');
+    }
+    const byCode = new Map<string, string>();
+    for (const manifest of manifests) {
+      const dir = manifest.localPath;
+      if (!dir || !fs.existsSync(dir)) continue;
       const key = path.resolve(dir).toLowerCase();
       if (seen.has(key)) continue;
+      const prevPath = byCode.get(manifest.code);
+      if (prevPath && prevPath !== key) {
+        fileLog.app(`[git-scan] code「${manifest.code}」路径冲突：${prevPath} 与 ${dir}`, 'warn');
+      }
+      byCode.set(manifest.code, key);
       seen.add(key);
       list.push({
         projectCode: manifest.code,

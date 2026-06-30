@@ -184,51 +184,55 @@ export function ProjectCard({ project }: { project: Project }) {
             {proc?.pid && <Badge variant="muted">PID {proc.pid}</Badge>}
           </div>
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-            <Tooltip content="启动这个项目，并在下方显示终端日志">
-              <Button
-                size="sm"
-                onClick={start}
-                disabled={status === 'running' || status === 'starting' || isProtected}
-              >
-                <Play className="h-3 w-3" /> 启动
-              </Button>
-            </Tooltip>
-            {!isProtected && risk !== 'high' && (
+            {!isProtected && (
               <>
-                <Tooltip content="停止由总控启动的进程">
+                <Tooltip content="启动这个项目，并在下方显示终端日志">
                   <Button
                     size="sm"
-                    variant="secondary"
-                    onClick={stop}
-                    disabled={status !== 'running'}
+                    onClick={start}
+                    disabled={status === 'running' || status === 'starting'}
                   >
-                    <Square className="h-3 w-3" /> 停止
+                    <Play className="h-3 w-3" /> 启动
                   </Button>
                 </Tooltip>
-                <Tooltip content="先停止再重新启动">
-                  <Button size="sm" variant="ghost" onClick={restart}>
-                    <RotateCcw className="h-3 w-3" />
-                  </Button>
-                </Tooltip>
-              </>
-            )}
-            {!isProtected && risk === 'high' && (
-              <>
-                <Tooltip content="高风险：停止需强确认">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={stop}
-                    disabled={status !== 'running'}
-                  >
-                    <Square className="h-3 w-3" /> 停止
-                  </Button>
-                </Tooltip>
-                <Tooltip content="高风险：重启需强确认">
-                  <Button size="sm" variant="ghost" onClick={restart}>
-                    <RotateCcw className="h-3 w-3" />
-                  </Button>
-                </Tooltip>
+                {risk !== 'high' && (
+                  <>
+                    <Tooltip content="停止由总控启动的进程">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={stop}
+                        disabled={status !== 'running'}
+                      >
+                        <Square className="h-3 w-3" /> 停止
+                      </Button>
+                    </Tooltip>
+                    <Tooltip content="先停止再重新启动">
+                      <Button size="sm" variant="ghost" onClick={restart}>
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                    </Tooltip>
+                  </>
+                )}
+                {risk === 'high' && (
+                  <>
+                    <Tooltip content="高风险：停止需强确认">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={stop}
+                        disabled={status !== 'running'}
+                      >
+                        <Square className="h-3 w-3" /> 停止
+                      </Button>
+                    </Tooltip>
+                    <Tooltip content="高风险：重启需强确认">
+                      <Button size="sm" variant="ghost" onClick={restart}>
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                    </Tooltip>
+                  </>
+                )}
               </>
             )}
             <Tooltip content="在总控里打开项目页面">

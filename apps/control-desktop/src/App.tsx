@@ -19,6 +19,7 @@ import { BackupPage } from '@/pages/BackupPage';
 import { DeployPage } from '@/pages/DeployPage';
 import { TasksPage } from '@/pages/TasksPage';
 import { AboutPage } from '@/pages/AboutPage';
+import { GlobalTaskBar } from '@/components/GlobalTaskBar';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { CloudOfflineBanner } from '@/components/CloudOfflineBanner';
 import type { NavPage } from '@/types/desktop';
@@ -73,6 +74,7 @@ export default function App() {
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar />
+            <GlobalTaskBar />
             <CloudOfflineBanner />
             <div className="flex min-h-0 flex-1">
               <main className="min-w-0 flex-1 overflow-auto">
