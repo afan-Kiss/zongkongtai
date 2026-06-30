@@ -38,8 +38,15 @@ function scanNoForbidden(label, text, extra = forbidden) {
 }
 
 const shell = read(path.join(SRC, 'components/layout/Shell.tsx'));
+const appStore = read(path.join(SRC, 'stores/appStore.ts'));
 if (shell.includes("'cookies'") || shell.includes('Cookie')) {
   failures.push('Shell MAIN_NAV must not include Cookie');
+}
+if (/云端|Agent|cloudConnected/i.test(shell)) {
+  failures.push('Shell must not show cloud/Agent top bar');
+}
+for (const key of ['cloudConnected', 'setCloud', 'setAgentStatus', 'agentStatus']) {
+  if (appStore.includes(key)) failures.push(`appStore must not contain ${key}`);
 }
 const navCount = (shell.match(/id:\s*'/g) || []).length;
 if (navCount !== 7) failures.push(`Shell MAIN_NAV must have 7 items, found ${navCount}`);

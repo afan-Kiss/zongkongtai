@@ -84,8 +84,8 @@ for (const bad of [5173, 3000, 3001, 7890, 8080, 4723, 4725, 4726, 4790, 4791]) 
 }
 
 const appStore = read(path.join(SRC, 'stores/appStore.ts'));
-if (!appStore.includes('portConflictAnalysis') || !appStore.includes('seriousCount')) {
-  failures.push('appStore must store portConflictAnalysis with seriousCount');
+if (!appStore.includes('portConflictAnalysis') || !appStore.includes('setPortConflictAnalysis')) {
+  failures.push('appStore must store portConflictAnalysis');
 }
 
 const dedup = read(path.join(SRC, 'lib/projectDedup.ts'));

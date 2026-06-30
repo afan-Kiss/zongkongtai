@@ -51,12 +51,8 @@ const PAGE_LABELS: Partial<Record<NavPage, string>> = {
   projects: '项目',
   git: 'Git 上传',
   health: '简单体检',
-  backup: '备份回滚',
-  deploy: '部署记录',
-  tasks: '后台任务',
   terminal: '终端',
   web: 'Web 页面',
-  ports: '端口',
   settings: '设置',
   about: '关于',
 };

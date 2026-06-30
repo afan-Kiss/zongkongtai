@@ -34,22 +34,14 @@ export interface Project {
   }>;
 }
 
-export type NavPage =
-  | 'overview'
-  | 'workspace'
-  | 'projects'
-  | 'git'
-  | 'health'
-  | 'backup'
-  | 'deploy'
-  | 'tasks'
-  | 'terminal'
-  | 'web'
-  | 'ports'
-  | 'cookies'
-  | 'windows'
-  | 'settings'
-  | 'about';
+export type DailyNavPage =
+  'overview' | 'projects' | 'git' | 'health' | 'terminal' | 'web' | 'settings' | 'about';
+
+/** 旧路由仅用于兼容回退，不出现在主导航 */
+export type LegacyNavPage =
+  'workspace' | 'backup' | 'deploy' | 'tasks' | 'ports' | 'cookies' | 'windows';
+
+export type NavPage = DailyNavPage | LegacyNavPage;
 
 export interface ProcessSession {
   sessionId: string;
@@ -77,19 +69,6 @@ export interface ProcessInfo {
   externalStopHint?: string;
   startupWarning?: string;
   sessions?: ProcessSession[];
-}
-
-export interface AgentStatus {
-  state: 'unknown' | 'online' | 'offline' | 'starting' | 'start_failed';
-  message: string;
-  serverUrl: string;
-  wsUrl: string;
-  localPid: number | null;
-  cloudOnline: boolean;
-  lastHeartbeatAt: string | null;
-  lastHeartbeatAgeSec: number | null;
-  machineName: string;
-  agentName: string;
 }
 
 export interface ToastItem {

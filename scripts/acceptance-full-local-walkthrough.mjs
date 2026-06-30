@@ -28,6 +28,8 @@ const projects = readAbs(path.join(SRC, 'pages/ProjectsPage.tsx'));
 const gitPage = readAbs(path.join(SRC, 'pages/GitPage.tsx'));
 const settings = readAbs(path.join(SRC, 'pages/SettingsPage.tsx'));
 const shell = readAbs(path.join(SRC, 'components/layout/Shell.tsx'));
+const appStore = readAbs(path.join(SRC, 'stores/appStore.ts'));
+const configTs = readAbs(path.join(ELECTRON, 'config.ts'));
 const appTsx = readAbs(path.join(SRC, 'App.tsx'));
 const healthCheck = readAbs(path.join(ELECTRON, 'health-check.ts'));
 const procMgr = readAbs(path.join(ELECTRON, 'process-manager.ts'));
@@ -43,6 +45,37 @@ const navCount = (shell.match(/id:\s*'/g) || []).length;
 if (navCount !== 7) failures.push(`Shell must have 7 nav items, found ${navCount}`);
 if (/Cookie|cookies/i.test(shell)) failures.push('Shell must not mention Cookie menu');
 if (/云端|cloud/i.test(shell)) failures.push('Shell must not mention cloud menu');
+if (/Agent|cloudConnected|qianfanCookie/i.test(shell)) {
+  failures.push('Shell TopBar must not show cloud/Agent/Cookie status');
+}
+if (!shell.includes('本地总控')) failures.push('Shell TopBar must show 本地总控');
+
+// appStore 无云端/Cookie/Agent 字段
+for (const needle of [
+  'cloudConnected',
+  'cloudMessage',
+  'agentsOnline',
+  'agentStatus',
+  'setCloud',
+  'setAgentStatus',
+  'qianfanCookie',
+  'conflictCount',
+  'warningCount',
+]) {
+  if (appStore.includes(needle)) failures.push(`appStore must not contain ${needle}`);
+}
+
+// config.ts 纯本地
+for (const needle of [
+  'controlServerUrl',
+  'adminPassword',
+  'adminUsername',
+  'serviceToken',
+  'agentToken',
+  '8.137.126.18',
+]) {
+  if (configTs.includes(needle)) failures.push(`config.ts must not contain ${needle}`);
+}
 
 // 5 设置页无账号密码 Token
 for (const needle of ['管理员账号', '管理员密码', 'Service Token', 'Agent Token', '测试云端']) {
@@ -136,7 +169,10 @@ if (!startCmd.includes('resolveManifestStartCommand')) {
 const MIN_LINES = {
   'apps/control-desktop/electron/ipc.ts': 80,
   'apps/control-desktop/electron/preload.ts': 40,
+  'apps/control-desktop/electron/config.ts': 30,
   'apps/control-desktop/src/App.tsx': 30,
+  'apps/control-desktop/src/components/layout/Shell.tsx': 40,
+  'apps/control-desktop/src/stores/appStore.ts': 40,
   'package.json': 5,
   'README.md': 10,
 };

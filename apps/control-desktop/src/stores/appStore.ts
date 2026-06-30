@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { deduplicateProjects } from '@/lib/projectDedup';
 import type { PortConflictAnalysis } from '@zhubo/control-shared';
-import type { AgentStatus, NavPage, ProcessInfo, Project, ToastItem } from '@/types/desktop';
+import type { NavPage, ProcessInfo, Project, ToastItem } from '@/types/desktop';
 import {
   EMPTY_GIT_SUMMARY,
   type GitSummary,
@@ -12,15 +12,9 @@ import {
 interface AppState {
   page: NavPage;
   setPage: (p: NavPage) => void;
-  cloudConnected: boolean;
-  cloudMessage: string;
-  agentsOnline: number;
-  agentStatus: AgentStatus | null;
-  conflictCount: number;
   portConflictAnalysis: PortConflictAnalysis | null;
   portConflictOpen: boolean;
   portConflictIgnoredIds: string[];
-  warningCount: number;
   runningCount: number;
   projects: Project[];
   projectsRaw: Project[];
@@ -32,8 +26,6 @@ interface AppState {
   toasts: ToastItem[];
   showDuplicateProjects: boolean;
   gitSummary: GitSummary;
-  setCloud: (ok: boolean, msg: string, extra?: Partial<AppState>) => void;
-  setAgentStatus: (s: AgentStatus | null) => void;
   setProjects: (p: Project[]) => void;
   selectProject: (id: string | null) => void;
   setProcess: (proc: ProcessInfo) => void;
@@ -78,15 +70,9 @@ function summarizeGitRows(
 export const useAppStore = create<AppState>((set, get) => ({
   page: 'overview',
   setPage: (page) => set({ page }),
-  cloudConnected: false,
-  cloudMessage: '尚未连接',
-  agentsOnline: 0,
-  agentStatus: null,
-  conflictCount: 0,
   portConflictAnalysis: null,
   portConflictOpen: false,
   portConflictIgnoredIds: [],
-  warningCount: 0,
   runningCount: 0,
   projects: [],
   projectsRaw: [],
@@ -98,12 +84,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   toasts: [],
   showDuplicateProjects: false,
   gitSummary: loadGitSummaryFromStorage() ?? EMPTY_GIT_SUMMARY,
-  setCloud: (ok, msg, extra) => set({ cloudConnected: ok, cloudMessage: msg, ...extra }),
-  setAgentStatus: (agentStatus) =>
-    set({
-      agentStatus,
-      agentsOnline: agentStatus?.cloudOnline ? 1 : 0,
-    }),
   setProjects: (projects) => {
     const clean = deduplicateProjects(projects);
     set({ projects: clean, projectsRaw: projects });
@@ -148,11 +128,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setShowDuplicateProjects: (showDuplicateProjects) => set({ showDuplicateProjects }),
-  setPortConflictAnalysis: (portConflictAnalysis) =>
-    set({
-      portConflictAnalysis,
-      conflictCount: portConflictAnalysis?.seriousCount ?? 0,
-    }),
+  setPortConflictAnalysis: (portConflictAnalysis) => set({ portConflictAnalysis }),
   setPortConflictOpen: (portConflictOpen) => set({ portConflictOpen }),
   ignorePortConflict: (id) =>
     set((s) => ({

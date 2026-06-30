@@ -10,7 +10,7 @@ import {
   type RiskLevel,
 } from '../../../packages/control-shared/src/steward';
 
-const ALLOWED_EXTERNAL_PREFIXES = ['http://127.0.0.1', 'http://localhost', 'http://8.137.126.18'];
+const ALLOWED_EXTERNAL_PREFIXES = ['http://127.0.0.1', 'http://localhost'];
 
 const FORBIDDEN_URL = /^(file:|javascript:|data:|vbscript:)/i;
 
@@ -37,7 +37,7 @@ export function assertAllowedExternalUrl(raw: string): string {
   }
   const ok = ALLOWED_EXTERNAL_PREFIXES.some((p) => url.startsWith(p));
   if (!ok) {
-    throw new Error('只允许打开 127.0.0.1、localhost 或 8.137.126.18 开头的 http 地址');
+    throw new Error('只允许打开 127.0.0.1 或 localhost 开头的 http 地址');
   }
   return url;
 }

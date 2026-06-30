@@ -27,6 +27,7 @@ const bootstrap = readAbs(path.join(SRC, 'hooks/useLocalBootstrap.ts'));
 const overview = readAbs(path.join(SRC, 'pages/OverviewPage.tsx'));
 const settings = readAbs(path.join(SRC, 'pages/SettingsPage.tsx'));
 const shell = readAbs(path.join(SRC, 'components/layout/Shell.tsx'));
+const appStore = readAbs(path.join(SRC, 'stores/appStore.ts'));
 const readme = read('README.md');
 
 const activeElectron = [
@@ -85,6 +86,24 @@ if (/portConflictIgnoredIds/.test(bootstrap)) {
 
 const navCount = (shell.match(/id:\s*'/g) || []).length;
 if (navCount !== 7) failures.push(`Shell must have 7 nav items, found ${navCount}`);
+if (shell.includes('Cookie') || shell.includes("'cookies'")) {
+  failures.push('Shell must not include Cookie nav');
+}
+if (/云端|Agent|cloudConnected|qianfanCookie/i.test(shell)) {
+  failures.push('Shell must not show cloud/Agent/Cookie top bar');
+}
+
+for (const key of [
+  'cloudConnected',
+  'cloudMessage',
+  'agentsOnline',
+  'agentStatus',
+  'setCloud',
+  'setAgentStatus',
+  'qianfanCookie',
+]) {
+  if (appStore.includes(key)) failures.push(`appStore must not contain ${key}`);
+}
 
 if (settings.includes('管理员账号') || settings.includes('管理员密码') || settings.includes('Token')) {
   failures.push('Settings must not have account/password/token fields');
