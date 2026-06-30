@@ -17,6 +17,19 @@ export interface RunCommandResult {
   timedOut: boolean;
 }
 
+const MAX_OUTPUT_CHARS = 1024 * 1024;
+const MAX_ERROR_CHARS = 500;
+
+function appendCapped(current: string, chunk: string, label: string): string {
+  if (current.length >= MAX_OUTPUT_CHARS) return current;
+  const next = current + chunk;
+  if (next.length <= MAX_OUTPUT_CHARS) return next;
+  if (current.length < MAX_OUTPUT_CHARS) {
+    fileLog.app(`[exec] 命令输出过长，已截断 ${label}`, 'warn');
+  }
+  return next.slice(0, MAX_OUTPUT_CHARS);
+}
+
 export function runCommand(opts: RunCommandOpts): Promise<RunCommandResult> {
   const timeoutMs = opts.timeoutMs ?? 8000;
   const label = opts.label || `${opts.cmd} ${opts.args.join(' ')}`.slice(0, 80);
@@ -81,13 +94,13 @@ export function runCommand(opts: RunCommandOpts): Promise<RunCommandResult> {
     child.stdout?.setEncoding('utf8');
     child.stderr?.setEncoding('utf8');
     child.stdout?.on('data', (d: string) => {
-      stdout += d;
+      stdout = appendCapped(stdout, d, label);
     });
     child.stderr?.on('data', (d: string) => {
-      stderr += d;
+      stderr = appendCapped(stderr, d, label);
     });
     child.on('error', (e) => {
-      stderr += e.message;
+      stderr = appendCapped(stderr, e.message, label);
       finish(1);
     });
     child.on('close', (code) => finish(code ?? 1));
@@ -108,6 +121,7 @@ export async function runGit(
     label: opts?.label || `git ${args[0]}`,
   });
   if (r.timedOut) throw new Error('Git 命令超时');
-  if (r.code !== 0) throw new Error((r.stderr || r.stdout || 'git failed').slice(0, 500));
+  if (r.code !== 0)
+    throw new Error((r.stderr || r.stdout || 'git failed').slice(0, MAX_ERROR_CHARS));
   return r.stdout;
 }

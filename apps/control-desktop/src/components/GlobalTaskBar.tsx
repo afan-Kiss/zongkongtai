@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, ChevronUp, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -8,25 +8,44 @@ function isActiveTask(t: TaskRecord) {
   return t.status === 'running' || t.status === 'queued';
 }
 
+function upsertTask(list: TaskRecord[], task: TaskRecord): TaskRecord[] {
+  const idx = list.findIndex((t) => t.id === task.id);
+  if (idx < 0) return [...list, task];
+  const next = [...list];
+  next[idx] = { ...next[idx], ...task };
+  return next;
+}
+
 export function GlobalTaskBar() {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [minimized, setMinimized] = useState(false);
+  const tasksRef = useRef<TaskRecord[]>([]);
 
   const refresh = useCallback(async () => {
     const list = (await window.zhuboDesktop.tasks.list()) as TaskRecord[];
+    tasksRef.current = list;
     setTasks(list);
+  }, []);
+
+  const patchTask = useCallback((task: TaskRecord) => {
+    tasksRef.current = upsertTask(tasksRef.current, task as TaskRecord);
+    setTasks([...tasksRef.current]);
   }, []);
 
   useEffect(() => {
     void refresh();
+    const interval = window.setInterval(() => void refresh(), 8000);
     const offs = [
-      window.zhuboDesktop.tasks.onProgress(() => void refresh()),
-      window.zhuboDesktop.tasks.onDone(() => void refresh()),
-      window.zhuboDesktop.tasks.onFailed(() => void refresh()),
-      window.zhuboDesktop.tasks.onCancelled(() => void refresh()),
+      window.zhuboDesktop.tasks.onProgress((task) => patchTask(task as TaskRecord)),
+      window.zhuboDesktop.tasks.onDone((task) => patchTask(task as TaskRecord)),
+      window.zhuboDesktop.tasks.onFailed((task) => patchTask(task as TaskRecord)),
+      window.zhuboDesktop.tasks.onCancelled((task) => patchTask(task as TaskRecord)),
     ];
-    return () => offs.forEach((o) => o());
-  }, [refresh]);
+    return () => {
+      window.clearInterval(interval);
+      offs.forEach((o) => o());
+    };
+  }, [patchTask, refresh]);
 
   const running = tasks.filter(isActiveTask);
   if (!running.length) return null;

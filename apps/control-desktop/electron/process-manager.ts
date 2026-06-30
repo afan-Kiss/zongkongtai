@@ -5,9 +5,18 @@ import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import treeKill from 'tree-kill';
 import pidusage from 'pidusage';
 import { sanitizeLogChunk } from './sanitize';
-import { isPortListeningAsync, invalidatePortCache, resolveStartCommand } from './port-manager';
+import {
+  invalidatePortCache,
+  resolveStartCommand,
+  scanLocalPortsAsync,
+  type LocalPortInfo,
+} from './port-manager';
 import { fileLog } from './file-logger';
 import { assertRiskAllowed } from './ipc-security';
+import {
+  normalizeRiskLevel,
+  DEFAULT_RISK_BY_CODE,
+} from '../../../packages/control-shared/src/steward';
 
 export type ProcessStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
 
@@ -239,11 +248,11 @@ export class ProcessManager extends EventEmitter {
       .filter((v, i, a) => a.indexOf(v) === i)
       .slice(0, 5);
 
-    for (const port of listenerPorts) {
+    let scannedPorts: LocalPortInfo[] = [];
+    if (listenerPorts.length > 0) {
       invalidatePortCache();
-      let occ;
       try {
-        occ = await isPortListeningAsync(port, undefined, true);
+        scannedPorts = await scanLocalPortsAsync(undefined, true);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/超时|timeout/i.test(msg)) {
@@ -254,6 +263,10 @@ export class ProcessManager extends EventEmitter {
         }
         return { ok: false, message: msg.slice(0, 200) };
       }
+    }
+
+    for (const port of listenerPorts) {
+      const occ = scannedPorts.find((p) => p.port === port);
       if (!occ) continue;
       const sameProjectRunning = this.processes.get(project.id)?.status === 'running';
       if (sameProjectRunning) {
@@ -391,9 +404,39 @@ export class ProcessManager extends EventEmitter {
     fileLog.process(`已停止 ${managed?.projectName || projectId}`);
   }
 
-  async stopAll(): Promise<void> {
+  async stopAll(opts: {
+    projects: Array<{ id: string; code?: string; name?: string; riskLevel?: string }>;
+    userConfirmed?: boolean;
+  }): Promise<{ stopped: string[]; skipped: Array<{ id: string; reason: string }> }> {
+    if (!opts?.projects?.length) {
+      throw new Error('stopAll 需要传入 projects 风险信息，禁止裸调用');
+    }
+    const byId = new Map(opts.projects.map((p) => [p.id, p]));
     const running = this.getRunning();
-    await Promise.all(running.map((p) => this.stop(p.projectId)));
+    const stopped: string[] = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
+
+    for (const proc of running) {
+      const meta = byId.get(proc.projectId) || { id: proc.projectId, name: proc.projectName };
+      const risk = normalizeRiskLevel(
+        meta.riskLevel || (meta.code ? DEFAULT_RISK_BY_CODE[meta.code] : undefined),
+      );
+      if (risk === 'protected') {
+        skipped.push({ id: proc.projectId, reason: 'protected 项目跳过' });
+        continue;
+      }
+      if (risk === 'high' && !opts.userConfirmed) {
+        skipped.push({ id: proc.projectId, reason: '高风险项目需强确认' });
+        continue;
+      }
+      if (risk === 'medium' && !opts.userConfirmed) {
+        skipped.push({ id: proc.projectId, reason: '中风险项目需确认' });
+        continue;
+      }
+      await this.stop(proc.projectId, { code: meta.code, name: meta.name, riskLevel: risk });
+      stopped.push(proc.projectId);
+    }
+    return { stopped, skipped };
   }
 
   async restart(project: Parameters<ProcessManager['start']>[0]) {

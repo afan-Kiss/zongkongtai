@@ -471,7 +471,7 @@ export function githubUrlFromRemote(remote?: string): string | null {
   if (!remote) return null;
   const m = remote.match(/github\.com[:/](.+?)(?:\.git)?$/i);
   if (!m) return null;
-  return `http://github.com/${m[1]}`;
+  return `https://github.com/${m[1]}`;
 }
 
 /** @deprecated 同步接口已移除，请用 listGitStatusesAsync */

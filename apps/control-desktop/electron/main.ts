@@ -7,6 +7,8 @@ import { initFileLogger, fileLog } from './file-logger';
 import { applyAutoLaunchFromConfig } from './auto-launch';
 import { processManager } from './process-manager';
 import { agentManager } from './agent-manager';
+import { readProjectManifest } from './manifest-scanner';
+import { DEFAULT_RISK_BY_CODE } from '../../../packages/control-shared/src/steward';
 
 process.on('uncaughtException', (err) => {
   console.error('[main] uncaughtException', err);
@@ -19,6 +21,18 @@ process.on('unhandledRejection', (err) => {
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+
+function buildStopAllProjects() {
+  return processManager.getRunning().map((p) => {
+    const m = p.cwd ? readProjectManifest(p.cwd) : null;
+    return {
+      id: p.projectId,
+      name: p.projectName,
+      code: m?.code,
+      riskLevel: m?.riskLevel || (m?.code ? DEFAULT_RISK_BY_CODE[m.code] : undefined),
+    };
+  });
+}
 
 async function confirmStopRunningProjects(): Promise<boolean> {
   const running = processManager.getRunning();
@@ -36,7 +50,7 @@ async function confirmStopRunningProjects(): Promise<boolean> {
   });
 
   if (response !== 0) return false;
-  await processManager.stopAll();
+  await processManager.stopAll({ projects: buildStopAllProjects(), userConfirmed: true });
   return true;
 }
 

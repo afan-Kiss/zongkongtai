@@ -15,6 +15,18 @@ const ALLOWED_EXTERNAL_PREFIXES = ['http://127.0.0.1', 'http://localhost', 'http
 
 const FORBIDDEN_URL = /^(file:|javascript:|data:|vbscript:)/i;
 
+const GITHUB_REPO_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/i;
+
+/** 仅允许打开 GitHub 仓库页，不放开其它 https */
+export function assertAllowedGithubUrl(raw: string): string {
+  const url = String(raw || '').trim();
+  if (!url) throw new Error('GitHub 地址为空');
+  if (!GITHUB_REPO_URL.test(url)) {
+    throw new Error('只允许打开 https://github.com/owner/repo 格式的仓库链接');
+  }
+  return url;
+}
+
 export function assertAllowedExternalUrl(raw: string): string {
   const url = String(raw || '').trim();
   if (!url) throw new Error('地址为空，无法打开');

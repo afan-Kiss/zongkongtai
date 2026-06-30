@@ -73,6 +73,7 @@ const api = {
   shell: {
     openPath: (p: string) => ipcRenderer.invoke('shell:openPath', p),
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+    openGithub: (url: string) => ipcRenderer.invoke('shell:openGithub', url),
   },
 
   native: {

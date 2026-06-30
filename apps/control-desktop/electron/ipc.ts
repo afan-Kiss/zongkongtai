@@ -70,6 +70,7 @@ import { taskManager } from './task-manager';
 import { wrapIpcHandler } from './ipc-perf';
 import {
   assertAllowedExternalUrl,
+  assertAllowedGithubUrl,
   assertAllowedOpenPath,
   assertMoveWindowOptions,
   assertTerminalSession,
@@ -389,6 +390,10 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     return shell.openExternal(assertAllowedExternalUrl(url));
+  });
+
+  ipcMain.handle('shell:openGithub', (_e, url: string) => {
+    return shell.openExternal(assertAllowedGithubUrl(url));
   });
 
   ipcMain.handle('native:status', () => getHelperStatus());

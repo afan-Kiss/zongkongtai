@@ -60,13 +60,17 @@ for (const needle of [
   if (!ipc.includes(needle)) failures.push(`ipc missing ${needle}`);
 }
 
-// 5. ports async
+// 5. ports async + preflight single scan
 const portMgr = read(path.join(ELECTRON, 'port-manager.ts'));
 if (!portMgr.includes('scanLocalPortsAsync')) failures.push('port-manager missing scanLocalPortsAsync');
 
 const procMgr = read(path.join(ELECTRON, 'process-manager.ts'));
-if (!procMgr.includes('isPortListeningAsync')) {
-  failures.push('process-manager preflight must use isPortListeningAsync');
+const preflightEarly = procMgr.slice(
+  procMgr.indexOf('async preflight'),
+  procMgr.indexOf('async start'),
+);
+if (!preflightEarly.includes('scanLocalPortsAsync(undefined, true)')) {
+  failures.push('process-manager preflight must use single scanLocalPortsAsync');
 }
 
 // 6. App pages + global task bar
@@ -189,10 +193,60 @@ if (!gitMgr.includes('listAllManifestEntries')) {
   failures.push('collectGitProjects must use listAllManifestEntries');
 }
 
+// 18. GitHub open via dedicated IPC
+if (!gitMgr.includes('https://github.com/')) {
+  failures.push('githubUrlFromRemote must return https://github.com/');
+}
+const ipcSecurity = read(path.join(ELECTRON, 'ipc-security.ts'));
+if (!ipcSecurity.includes('assertAllowedGithubUrl')) {
+  failures.push('ipc-security missing assertAllowedGithubUrl');
+}
+if (!ipc.includes('shell:openGithub')) failures.push('ipc missing shell:openGithub');
+const gitPage = read(path.join(SRC, 'pages/GitPage.tsx'));
+if (!gitPage.includes('shell.openGithub')) {
+  failures.push('GitPage must use shell.openGithub');
+}
+
+// 19. preflight single port scan
+const preflightBlock = procMgr.slice(
+  procMgr.indexOf('async preflight'),
+  procMgr.indexOf('async start'),
+);
+if (!preflightBlock.includes('scanLocalPortsAsync(undefined, true)')) {
+  failures.push('preflight must scan ports once via scanLocalPortsAsync');
+}
+if (preflightBlock.includes('isPortListeningAsync')) {
+  failures.push('preflight must not call isPortListeningAsync per port');
+}
+
+// 20. GlobalTaskBar no refresh on every progress
+const taskBar = read(path.join(SRC, 'components/GlobalTaskBar.tsx'));
+if (taskBar.includes('onProgress(() => void refresh()')) {
+  failures.push('GlobalTaskBar must not refresh on every progress');
+}
+if (!taskBar.includes('patchTask')) {
+  failures.push('GlobalTaskBar must patch local state from task events');
+}
+
+// 21. runCommand output cap
+const asyncExec = read(path.join(ELECTRON, 'async-exec.ts'));
+if (!asyncExec.includes('MAX_OUTPUT_CHARS')) {
+  failures.push('async-exec missing output length cap');
+}
+
+// 22. stopAll requires risk map
+if (!procMgr.includes('stopAll 需要传入 projects 风险信息')) {
+  failures.push('stopAll must require projects risk map');
+}
+const mainTs = read(path.join(ELECTRON, 'main.ts'));
+if (!mainTs.includes('buildStopAllProjects')) {
+  failures.push('main.ts must pass projects to stopAll');
+}
+
 if (failures.length) {
   console.error('FAIL desktop performance acceptance:');
   for (const f of failures) console.error(' -', f);
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checks: 17 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: 22 }, null, 2));

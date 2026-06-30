@@ -242,7 +242,7 @@ export function GitPage() {
                     variant="ghost"
                     onClick={async () => {
                       const url = await window.zhuboDesktop.git.githubUrl(selected.gitRemote);
-                      if (url) window.zhuboDesktop.shell.openExternal(url);
+                      if (url) await window.zhuboDesktop.shell.openGithub(url);
                       else pushToast('error', '无法解析 GitHub 地址');
                     }}
                   >
