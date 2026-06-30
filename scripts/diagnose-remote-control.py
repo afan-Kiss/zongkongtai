@@ -32,10 +32,6 @@ def main() -> int:
         "curl -s -o /dev/null -w 'local4790=%{http_code}' http://127.0.0.1:4790/api/health; echo",
         "curl -s -o /dev/null -w 'public=%{http_code}' http://127.0.0.1/control/api/health; echo",
         "tail -20 /root/.pm2/logs/zhubo-control-center-error.log 2>/dev/null || true",
-        f"cd {DEPLOY} && pm2 restart zhubo-control-center --update-env",
-        "sleep 3",
-        "curl -s http://127.0.0.1:4790/api/health || echo health_fail",
-        "curl -s -o /dev/null -w 'public_after=%{http_code}' http://127.0.0.1/control/api/health; echo",
     ]
     for cmd in cmds:
         _, o, e = c.exec_command(cmd, timeout=90)

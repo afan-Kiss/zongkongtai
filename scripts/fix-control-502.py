@@ -1,4 +1,5 @@
-"""Diagnose control center 502 and fix PM2 if needed."""
+#!/usr/bin/env python3
+"""fix：诊断 control 502 并按需重启 PM2（默认 dry-run）。"""
 from __future__ import annotations
 
 import importlib.util
@@ -10,6 +11,8 @@ import paramiko
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = "/www/wwwroot/zhubo-control-center"
+sys.path.insert(0, str(ROOT / "deploy" / "aliyun"))
+from ops_lib import parse_fix_args  # noqa: E402
 
 
 def load_all() -> None:
@@ -34,6 +37,7 @@ def run(c, cmd: str) -> str:
 
 
 def main() -> int:
+    execute = parse_fix_args("诊断 control 502 并按需 pm2 restart control-center")
     load_all()
     pwd = os.environ.get("SSH_PASS", "")
     c = paramiko.SSHClient()
@@ -45,12 +49,15 @@ def main() -> int:
     run(c, "curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1/control/api/health || true")
     run(c, "pm2 logs zhubo-control-center --lines 15 --nostream 2>/dev/null | tail -20")
 
-    # safe restart with env
-    run(
-        c,
-        f"cd {DEPLOY} && set -a && source .env && set +a && pm2 restart zhubo-control-center --update-env && sleep 3 && curl -sf http://127.0.0.1:4790/api/health",
+    restart_cmd = (
+        f"cd {DEPLOY} && set -a && source .env && set +a && "
+        "pm2 restart zhubo-control-center --update-env && sleep 3 && "
+        "curl -sf http://127.0.0.1:4790/api/health"
     )
-    run(c, "curl -sf -o /dev/null -w 'public_health=%{http_code}' http://127.0.0.1/control/api/health; echo")
+    print("\n计划（需 --execute）：", restart_cmd[:120], "…")
+    if execute:
+        run(c, restart_cmd)
+        run(c, "curl -sf -o /dev/null -w 'public_health=%{http_code}' http://127.0.0.1/control/api/health; echo")
     c.close()
     return 0
 

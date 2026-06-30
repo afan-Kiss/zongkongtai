@@ -22,3 +22,6 @@ scripts/*report*.json
 scripts/qianfan-cookie-audit.json
 *.log
 *.zip
+**/*.py
+deploy/aliyun/**
+scripts/*.py
