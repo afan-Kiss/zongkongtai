@@ -1,4 +1,3 @@
-import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -15,21 +14,11 @@ import {
   DEFAULT_RISK_BY_CODE,
 } from '../../../packages/control-shared/src/steward';
 import { readProjectManifest, getScanRoot } from './manifest-scanner';
+import { runGit } from './async-exec';
+import { fileLog } from './file-logger';
 
-function runGit(cwd: string, args: string[]): string {
-  try {
-    return execFileSync('git', args, {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: 8 * 1024 * 1024,
-      windowsHide: true,
-    }).trim();
-  } catch (e: unknown) {
-    const err = e as { stderr?: Buffer | string; stdout?: Buffer | string; message?: string };
-    const msg = String(err.stderr || err.stdout || err.message || e);
-    throw new Error(msg.trim().slice(0, 500));
-  }
-}
+const GIT_TIMEOUT_MS = 3000;
+const GIT_FETCH_TIMEOUT_MS = 15000;
 
 function hasGitRepo(dir: string): boolean {
   return fs.existsSync(path.join(dir, '.git'));
@@ -45,15 +34,6 @@ function parsePorcelain(output: string): GitFileChange[] {
     changes.push({ path: filePath.replace(/\\/g, '/'), status });
   }
   return changes;
-}
-
-function countIgnored(cwd: string): number {
-  try {
-    const out = runGit(cwd, ['status', '--porcelain', '--ignored']);
-    return out.split(/\r?\n/).filter((l) => l.startsWith('!!')).length;
-  } catch {
-    return 0;
-  }
 }
 
 function detectState(opts: {
@@ -72,12 +52,17 @@ function detectState(opts: {
   return 'clean';
 }
 
-export function getGitStatusForPath(opts: {
-  projectCode: string;
-  projectName: string;
-  localPath: string;
-  gitRemote?: string;
-}): GitProjectStatus {
+export async function getGitStatusForPath(
+  opts: {
+    projectCode: string;
+    projectName: string;
+    localPath: string;
+    gitRemote?: string;
+    fetchRemote?: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<GitProjectStatus> {
+  const started = Date.now();
   const { projectCode, projectName, localPath } = opts;
   const base: GitProjectStatus = {
     projectCode,
@@ -105,22 +90,51 @@ export function getGitStatusForPath(opts: {
   }
 
   try {
-    const branch = runGit(localPath, ['rev-parse', '--abbrev-ref', 'HEAD']);
-    const headCommit = runGit(localPath, ['rev-parse', 'HEAD']);
-    const headShort = runGit(localPath, ['rev-parse', '--short', 'HEAD']);
+    const branch = await runGit(localPath, ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+      label: 'rev-parse branch',
+    });
+    const headCommit = await runGit(localPath, ['rev-parse', 'HEAD'], {
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+    });
+    const headShort = await runGit(localPath, ['rev-parse', '--short', 'HEAD'], {
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+    });
+
     let gitRemote = opts.gitRemote;
     try {
-      gitRemote = gitRemote || runGit(localPath, ['remote', 'get-url', 'origin']);
+      gitRemote =
+        gitRemote ||
+        (await runGit(localPath, ['remote', 'get-url', 'origin'], {
+          timeoutMs: GIT_TIMEOUT_MS,
+          signal,
+        }));
     } catch {
       /* no origin */
     }
 
-    const porcelain = runGit(localPath, ['status', '--porcelain']);
+    const porcelain = await runGit(localPath, ['status', '--porcelain'], {
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+    });
     const changes = parsePorcelain(porcelain);
     const addedCount = changes.filter((c) => c.status.includes('A') || c.status === '??').length;
     const modifiedCount = changes.filter((c) => /M/.test(c.status)).length;
     const deletedCount = changes.filter((c) => /D/.test(c.status)).length;
-    const ignoredCount = countIgnored(localPath);
+
+    let ignoredCount = 0;
+    try {
+      const ign = await runGit(localPath, ['status', '--porcelain', '--ignored'], {
+        timeoutMs: GIT_TIMEOUT_MS,
+        signal,
+      });
+      ignoredCount = ign.split(/\r?\n/).filter((l) => l.startsWith('!!')).length;
+    } catch {
+      /* ignore */
+    }
 
     const changePaths = changes.map((c) => c.path);
     const { safe, blocked } = filterGitPaths(changePaths);
@@ -133,28 +147,42 @@ export function getGitStatusForPath(opts: {
 
     let unpushed = false;
     let behind = false;
-    if (gitRemote) {
+
+    if (gitRemote && opts.fetchRemote) {
       try {
-        runGit(localPath, ['fetch', 'origin', branch, '--quiet']);
+        await runGit(localPath, ['fetch', 'origin', branch, '--quiet'], {
+          timeoutMs: GIT_FETCH_TIMEOUT_MS,
+          signal,
+          label: 'fetch',
+        });
       } catch {
         /* offline ok */
       }
+    }
+
+    if (gitRemote) {
       try {
-        const aheadBehind = runGit(localPath, [
-          'rev-list',
-          '--left-right',
-          '--count',
-          `origin/${branch}...HEAD`,
-        ]);
+        const aheadBehind = await runGit(
+          localPath,
+          ['rev-list', '--left-right', '--count', `origin/${branch}...HEAD`],
+          { timeoutMs: GIT_TIMEOUT_MS, signal },
+        );
         const [behindStr, aheadStr] = aheadBehind.split(/\s+/);
         behind = Number(behindStr) > 0;
         unpushed = Number(aheadStr) > 0;
       } catch {
         try {
-          const unpushedLog = runGit(localPath, ['log', `origin/${branch}..HEAD`, '--oneline']);
+          const unpushedLog = await runGit(
+            localPath,
+            ['log', `origin/${branch}..HEAD`, '--oneline'],
+            {
+              timeoutMs: GIT_TIMEOUT_MS,
+              signal,
+            },
+          );
           unpushed = !!unpushedLog.trim();
         } catch {
-          unpushed = porcelain.length > 0;
+          unpushed = changes.length > 0;
         }
       }
     }
@@ -167,6 +195,8 @@ export function getGitStatusForPath(opts: {
       behind,
       hasGit: true,
     });
+
+    fileLog.app(`[git] 项目=${projectName} status=ok duration=${Date.now() - started}ms`);
 
     return {
       ...base,
@@ -187,41 +217,50 @@ export function getGitStatusForPath(opts: {
       blockedPaths,
     };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const isTimeout = /超时|timeout/i.test(msg);
+    fileLog.app(
+      `[git] 项目=${projectName} status=${isTimeout ? 'timeout' : 'error'} duration=${Date.now() - started}ms ${msg}`,
+      isTimeout ? 'warn' : 'error',
+    );
     return {
       ...base,
-      error: e instanceof Error ? e.message : String(e),
+      error: isTimeout ? 'Git 检查超时，已跳过' : msg.slice(0, 300),
       state: 'no_git',
     };
   }
 }
 
-export function listGitStatuses(
+export function collectGitProjects(
   projects: Array<{
     code: string;
     name: string;
     localPath?: string | null;
     gitRemote?: string | null;
   }>,
-): GitProjectStatus[] {
+): Array<{ projectCode: string; projectName: string; localPath: string; gitRemote?: string }> {
   const seen = new Set<string>();
-  const results: GitProjectStatus[] = [];
-  const scanRoot = getScanRoot();
+  const list: Array<{
+    projectCode: string;
+    projectName: string;
+    localPath: string;
+    gitRemote?: string;
+  }> = [];
 
   for (const p of projects) {
     if (!p.localPath) continue;
     const key = path.resolve(p.localPath).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push(
-      getGitStatusForPath({
-        projectCode: p.code,
-        projectName: p.name,
-        localPath: p.localPath,
-        gitRemote: p.gitRemote || undefined,
-      }),
-    );
+    list.push({
+      projectCode: p.code,
+      projectName: p.name,
+      localPath: p.localPath,
+      gitRemote: p.gitRemote || undefined,
+    });
   }
 
+  const scanRoot = getScanRoot();
   if (scanRoot && fs.existsSync(scanRoot)) {
     for (const ent of fs.readdirSync(scanRoot, { withFileTypes: true })) {
       if (!ent.isDirectory()) continue;
@@ -231,17 +270,53 @@ export function listGitStatuses(
       const key = path.resolve(dir).toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      results.push(
-        getGitStatusForPath({
-          projectCode: manifest.code,
-          projectName: manifest.name,
-          localPath: dir,
-          gitRemote: manifest.gitRemote,
-        }),
-      );
+      list.push({
+        projectCode: manifest.code,
+        projectName: manifest.name,
+        localPath: dir,
+        gitRemote: manifest.gitRemote,
+      });
     }
   }
 
+  return list.sort((a, b) => a.projectName.localeCompare(b.projectName, 'zh-CN'));
+}
+
+export async function listGitStatusesAsync(
+  projects: Parameters<typeof collectGitProjects>[0],
+  opts?: {
+    fetchRemote?: boolean;
+    concurrency?: number;
+    signal?: AbortSignal;
+    onProgress?: (payload: {
+      index: number;
+      total: number;
+      status: GitProjectStatus;
+      results: GitProjectStatus[];
+    }) => void;
+  },
+): Promise<GitProjectStatus[]> {
+  const items = collectGitProjects(projects);
+  const total = items.length;
+  const results: GitProjectStatus[] = [];
+  const concurrency = opts?.concurrency ?? 2;
+  let index = 0;
+
+  async function worker() {
+    while (index < total) {
+      if (opts?.signal?.aborted) break;
+      const i = index++;
+      const item = items[i];
+      const status = await getGitStatusForPath(
+        { ...item, fetchRemote: opts?.fetchRemote },
+        opts?.signal,
+      );
+      results.push(status);
+      opts?.onProgress?.({ index: i + 1, total, status, results: [...results] });
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, total || 1) }, () => worker()));
   return results.sort((a, b) => a.projectName.localeCompare(b.projectName, 'zh-CN'));
 }
 
@@ -254,56 +329,69 @@ export interface GitCommitPushResult {
   pushed?: boolean;
 }
 
-export function gitCommitAndPush(opts: {
-  localPath: string;
-  message?: string;
-  paths?: string[];
-  pushOnly?: boolean;
-}): GitCommitPushResult {
+export async function gitCommitAndPush(
+  opts: {
+    localPath: string;
+    message?: string;
+    paths?: string[];
+    pushOnly?: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<GitCommitPushResult> {
   const { localPath } = opts;
-  if (!hasGitRepo(localPath)) {
-    return { ok: false, message: '没有 Git 仓库' };
-  }
+  if (!hasGitRepo(localPath)) return { ok: false, message: '没有 Git 仓库' };
 
-  const branch = runGit(localPath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const branch = await runGit(localPath, ['rev-parse', '--abbrev-ref', 'HEAD'], {
+    timeoutMs: GIT_TIMEOUT_MS,
+    signal,
+  });
   let remote = '';
   try {
-    remote = runGit(localPath, ['remote', 'get-url', 'origin']);
+    remote = await runGit(localPath, ['remote', 'get-url', 'origin'], {
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+    });
   } catch {
     return { ok: false, message: '远端地址没配置' };
   }
 
   if (!opts.pushOnly) {
-    const porcelain = runGit(localPath, ['status', '--porcelain']);
+    const porcelain = await runGit(localPath, ['status', '--porcelain'], {
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+    });
     const changes = parsePorcelain(porcelain);
-    if (!changes.length) {
-      return { ok: false, message: '没有可提交改动' };
-    }
+    if (!changes.length) return { ok: false, message: '没有可提交改动' };
 
     const paths = opts.paths?.length ? opts.paths : filterGitPaths(changes.map((c) => c.path)).safe;
-    if (!paths.length) {
-      return { ok: false, message: '改动文件均在敏感列表中，已阻止提交' };
-    }
+    if (!paths.length) return { ok: false, message: '改动文件均在敏感列表中，已阻止提交' };
 
     for (const p of paths) {
-      runGit(localPath, ['add', '--', p]);
+      await runGit(localPath, ['add', '--', p], { timeoutMs: GIT_TIMEOUT_MS, signal });
     }
 
     const msg = (opts.message || '').trim() || suggestCommitMessage(paths);
-    runGit(localPath, ['commit', '-m', msg]);
+    await runGit(localPath, ['commit', '-m', msg], { timeoutMs: 10000, signal });
   } else {
-    const unpushed = runGit(localPath, ['log', `@{u}..HEAD`, '--oneline']).trim();
-    const dirty = runGit(localPath, ['status', '--porcelain']).trim();
-    if (!unpushed && dirty) {
-      return { ok: false, message: '有未提交改动，请先提交再 push' };
-    }
-    if (!unpushed && !dirty) {
-      return { ok: false, message: '没有未 push 的 commit' };
-    }
+    const unpushed = (
+      await runGit(localPath, ['log', `@{u}..HEAD`, '--oneline'], {
+        timeoutMs: GIT_TIMEOUT_MS,
+        signal,
+      })
+    ).trim();
+    const dirty = (
+      await runGit(localPath, ['status', '--porcelain'], { timeoutMs: GIT_TIMEOUT_MS, signal })
+    ).trim();
+    if (!unpushed && dirty) return { ok: false, message: '有未提交改动，请先提交再 push' };
+    if (!unpushed && !dirty) return { ok: false, message: '没有未 push 的 commit' };
   }
 
   try {
-    runGit(localPath, ['push', 'origin', branch]);
+    await runGit(localPath, ['push', 'origin', branch], {
+      timeoutMs: 60000,
+      signal,
+      label: 'push',
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/rejected|non-fast-forward|fetch first/i.test(msg)) {
@@ -312,7 +400,10 @@ export function gitCommitAndPush(opts: {
     return { ok: false, message: msg.slice(0, 300) };
   }
 
-  const commitHash = runGit(localPath, ['rev-parse', '--short', 'HEAD']);
+  const commitHash = await runGit(localPath, ['rev-parse', '--short', 'HEAD'], {
+    timeoutMs: GIT_TIMEOUT_MS,
+    signal,
+  });
   return {
     ok: true,
     message: `已 push 到 origin/${branch}`,
@@ -323,11 +414,21 @@ export function gitCommitAndPush(opts: {
   };
 }
 
-export function gitPullLatest(localPath: string): { ok: boolean; message: string } {
+export async function gitPullLatest(
+  localPath: string,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; message: string }> {
   if (!hasGitRepo(localPath)) return { ok: false, message: '没有 Git 仓库' };
-  const branch = runGit(localPath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const branch = await runGit(localPath, ['rev-parse', '--abbrev-ref', 'HEAD'], {
+    timeoutMs: GIT_TIMEOUT_MS,
+    signal,
+  });
   try {
-    runGit(localPath, ['pull', '--rebase', 'origin', branch]);
+    await runGit(localPath, ['pull', '--rebase', 'origin', branch], {
+      timeoutMs: 60000,
+      signal,
+      label: 'pull',
+    });
     return { ok: true, message: '已 pull 最新代码' };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -346,4 +447,12 @@ export function githubUrlFromRemote(remote?: string): string | null {
   const m = remote.match(/github\.com[:/](.+?)(?:\.git)?$/i);
   if (!m) return null;
   return `http://github.com/${m[1]}`;
+}
+
+/** @deprecated 同步接口已移除，请用 listGitStatusesAsync */
+export function listGitStatuses(
+  projects: Parameters<typeof collectGitProjects>[0],
+): GitProjectStatus[] {
+  void projects;
+  throw new Error('listGitStatuses 已废弃，请使用 git:list 后台任务');
 }

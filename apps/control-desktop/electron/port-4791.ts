@@ -1,10 +1,11 @@
-import { execSync } from 'child_process';
 import treeKill from 'tree-kill';
-import { isPortListening } from './port-manager';
+import { isPortListening, isPortListeningAsync, scanLocalPortsAsync } from './port-manager';
+import { runCommand } from './async-exec';
 import { fileLog } from './file-logger';
 
 const LEGACY_PORT = 4791;
 const CONTROL_SERVER_PORT = 4790;
+const CMD_TIMEOUT_MS = 3000;
 
 const SAFE_CMD_PATTERNS = [
   /[\\/]apps[\\/]control-web/i,
@@ -30,20 +31,27 @@ const UNSAFE_CMD_PATTERNS = [
   /@live\//i,
 ];
 
-function getProcessCommandLine(pid: number): string {
+async function getProcessCommandLine(pid: number, signal?: AbortSignal): Promise<string> {
   try {
-    const out = execSync(
-      `powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \\"ProcessId=${pid}\\").CommandLine"`,
-      { encoding: 'utf8', windowsHide: true, maxBuffer: 1024 * 1024 },
-    );
-    return out.trim();
+    const r = await runCommand({
+      cmd: 'powershell',
+      args: [
+        '-NoProfile',
+        '-Command',
+        `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`,
+      ],
+      timeoutMs: CMD_TIMEOUT_MS,
+      signal,
+      label: 'powershell CommandLine',
+    });
+    return r.stdout.trim();
   } catch {
     return '';
   }
 }
 
-function classify4791Process(pid: number, processName?: string) {
-  const cmd = getProcessCommandLine(pid);
+async function classify4791Process(pid: number, processName?: string, signal?: AbortSignal) {
+  const cmd = await getProcessCommandLine(pid, signal);
   const name = (processName || '').toLowerCase();
 
   if (name !== 'node.exe' && name !== 'node') {
@@ -66,9 +74,9 @@ function classify4791Process(pid: number, processName?: string) {
     return { canClose: true, cmd, reason: '识别为本地总控台联调进程' };
   }
 
-  const p4790 = isPortListening(CONTROL_SERVER_PORT);
+  const p4790 = await isPortListeningAsync(CONTROL_SERVER_PORT, signal);
   if (p4790?.pid && /dist[\\/]index\.js/i.test(cmd)) {
-    const cmd4790 = getProcessCommandLine(p4790.pid);
+    const cmd4790 = await getProcessCommandLine(p4790.pid, signal);
     if (/dist[\\/]index\.js/i.test(cmd4790)) {
       return {
         canClose: true,
@@ -79,11 +87,7 @@ function classify4791Process(pid: number, processName?: string) {
   }
 
   if (/vite|4791|control-web/i.test(cmd)) {
-    return {
-      canClose: true,
-      cmd,
-      reason: '识别为本地总控前端 vite 联调进程',
-    };
+    return { canClose: true, cmd, reason: '识别为本地总控前端 vite 联调进程' };
   }
 
   if (/dist[\\/]index\.js/i.test(cmd)) {
@@ -94,15 +98,12 @@ function classify4791Process(pid: number, processName?: string) {
     };
   }
 
-  return {
-    canClose: false,
-    cmd,
-    reason: '无法确认进程归属，只提示不自动关闭',
-  };
+  return { canClose: false, cmd, reason: '无法确认进程归属，只提示不自动关闭' };
 }
 
-export function inspectLegacy4791() {
-  const rt = isPortListening(LEGACY_PORT);
+export async function inspectLegacy4791Async(signal?: AbortSignal) {
+  await scanLocalPortsAsync(signal);
+  const rt = await isPortListeningAsync(LEGACY_PORT, signal);
   if (!rt?.pid) {
     return {
       port: LEGACY_PORT,
@@ -113,7 +114,7 @@ export function inspectLegacy4791() {
     };
   }
 
-  const cls = classify4791Process(rt.pid, rt.processName);
+  const cls = await classify4791Process(rt.pid, rt.processName, signal);
   return {
     port: LEGACY_PORT,
     listening: true,
@@ -127,8 +128,33 @@ export function inspectLegacy4791() {
   };
 }
 
+/** 同步兼容 — 使用缓存端口，不阻塞 */
+export function inspectLegacy4791() {
+  const rt = isPortListening(LEGACY_PORT);
+  if (!rt?.pid) {
+    return {
+      port: LEGACY_PORT,
+      listening: false,
+      label: '本地联调遗留端口，可关闭。',
+      canClose: false,
+      message: `端口 ${LEGACY_PORT} 当前未监听`,
+    };
+  }
+  return {
+    port: LEGACY_PORT,
+    listening: true,
+    pid: rt.pid,
+    processName: rt.processName,
+    label: '本地联调遗留端口，可关闭。',
+    canClose: false,
+    message: '请刷新端口缓存后重试异步检查',
+    commandPreview: '',
+    commandFull: '',
+  };
+}
+
 export async function closeLegacy4791(): Promise<{ ok: boolean; message: string }> {
-  const info = inspectLegacy4791();
+  const info = await inspectLegacy4791Async();
   if (!info.listening) {
     return { ok: true, message: `端口 ${LEGACY_PORT} 未在监听，无需关闭` };
   }
@@ -144,7 +170,7 @@ export async function closeLegacy4791(): Promise<{ ok: boolean; message: string 
   });
 
   await new Promise((r) => setTimeout(r, 800));
-  const still = isPortListening(LEGACY_PORT);
+  const still = await isPortListeningAsync(LEGACY_PORT);
   if (still) {
     fileLog.process(`关闭 4791 失败 PID=${info.pid}`, 'error');
     return { ok: false, message: `已尝试关闭 PID ${info.pid}，但端口 ${LEGACY_PORT} 仍在监听` };
