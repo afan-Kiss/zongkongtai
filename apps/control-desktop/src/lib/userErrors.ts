@@ -1,12 +1,5 @@
 /** 把 IPC / Git / Native 技术错误转成用户能看懂的大白话 */
 
-import {
-  agentCloudAuthToast,
-  cloudFailToastMessage,
-  cookieReadFailToast,
-  isAuthLikeError,
-} from '@/lib/cloudStatus';
-
 export function humanizeUserError(
   raw: string,
   context?: 'git' | 'native' | 'login' | 'cloud' | 'cookie' | 'agent',
@@ -14,17 +7,8 @@ export function humanizeUserError(
   const msg = raw.trim();
   if (!msg) return '操作失败，请重试';
 
-  if (context === 'cloud' || (context === 'login' && isAuthLikeError(msg))) {
-    return '云端连接失败：账号或密码不对。你仍然可以使用本地项目、Git 和终端功能。';
-  }
   if (context === 'cookie') {
-    return cookieReadFailToast();
-  }
-  if (context === 'agent' || /agent.*401|agent.*403|agent.*token/i.test(msg)) {
-    return agentCloudAuthToast();
-  }
-  if (isAuthLikeError(msg)) {
-    return cloudFailToastMessage();
+    return '暂时无法读取本地 Cookie，请确认千帆中转机器人已运行并同步。';
   }
 
   if (/Error invoking remote method 'native:arrangeQianfan'/i.test(msg)) {

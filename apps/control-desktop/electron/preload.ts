@@ -14,6 +14,7 @@ const api = {
     setAutoStart: (enabled: boolean) => ipcRenderer.invoke('config:setAutoStart', enabled),
     openLogsDir: () => ipcRenderer.invoke('config:openLogsDir'),
     openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),
+    resetLocalCache: () => ipcRenderer.invoke('config:resetLocalCache'),
   },
 
   cloud: {
@@ -175,6 +176,8 @@ const api = {
     relayStatus: (url?: string) => ipcRenderer.invoke('cookie:relayStatus', url),
     syncNow: (url?: string) => ipcRenderer.invoke('cookie:syncNow', url),
     startRelay: () => ipcRenderer.invoke('cookie:startRelay'),
+    localShops: () => ipcRenderer.invoke('cookie:localShops'),
+    localSummary: () => ipcRenderer.invoke('cookie:localSummary'),
     pasteUpload: (payload: { shopName: string; cookie: string }) =>
       ipcRenderer.invoke('cookie:pasteUpload', payload),
   },

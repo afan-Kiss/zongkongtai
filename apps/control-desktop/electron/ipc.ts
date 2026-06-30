@@ -41,7 +41,7 @@ import {
   getHelperStatus,
 } from './native-helper-client';
 
-import { loadLocalProjectsFromManifests } from './local-projects';
+import { loadLocalProjectsFromManifests, findLocalProjectById } from './local-projects';
 import { WORKSPACES, runWorkspace } from './workspace-manager';
 
 import { getLogDir } from './file-logger';
@@ -82,7 +82,10 @@ import {
   startQianfanRelay,
   fetchRelayAutoStatus,
   qianfanShopsForDesktop,
+  localCookieSummary,
 } from './cookie-sync';
+import { clearLocalCookieStore, getLocalCookieStorePath } from './local-cookie-store';
+import { startLocalControlApi } from './local-control-api';
 import { wrapIpcHandler } from './ipc-perf';
 import {
   assertAllowedExternalUrl,
@@ -124,26 +127,22 @@ async function resolveProjectForRisk(projectId: string, projectMeta?: unknown) {
     });
     if (merged.code || merged.riskLevel) return merged;
   }
-  try {
-    await cloudClient.ensureLogin();
-    const detail = await cloudClient.project(projectId);
-    return pickSafeProjectPayload(detail as Record<string, unknown>);
-  } catch {
-    const managed = processManager.get(projectId);
-    if (managed?.cwd) {
-      const m = readProjectManifest(managed.cwd);
-      if (m) {
-        return pickSafeProjectPayload({
-          id: projectId,
-          name: managed.projectName,
-          code: m.code,
-          localPath: managed.cwd,
-          riskLevel: m.riskLevel,
-        });
-      }
+  const local = findLocalProjectById(projectId);
+  if (local) return pickSafeProjectPayload(local as Record<string, unknown>);
+  const managed = processManager.get(projectId);
+  if (managed?.cwd) {
+    const m = readProjectManifest(managed.cwd);
+    if (m) {
+      return pickSafeProjectPayload({
+        id: projectId,
+        name: managed.projectName,
+        code: m.code,
+        localPath: managed.cwd,
+        riskLevel: m.riskLevel,
+      });
     }
-    throw new Error('无法确认项目风险等级，已阻止操作');
   }
+  throw new Error('无法确认项目信息，已阻止操作');
 }
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
@@ -157,6 +156,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
   agentManager.startPolling(20000);
 
+  void startLocalControlApi();
+
   processManager.on('log', ({ projectId, data }) => {
     getMainWindow()?.webContents.send('terminal:data', { projectId, data });
   });
@@ -169,73 +170,37 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     const cfg = loadConfig();
 
     return {
-      ...cfg,
-
-      adminPassword: cfg.adminPassword ? '******' : '',
-
-      agentToken: cfg.agentToken ? maskToken(cfg.agentToken) : '',
-
-      serviceToken: cfg.serviceToken ? maskToken(cfg.serviceToken) : '',
-
-      hasAdminPassword: !!cfg.adminPassword,
-
-      hasAgentToken: !!cfg.agentToken,
-
-      hasServiceToken: !!cfg.serviceToken,
-
+      scanRoot: cfg.scanRoot,
+      qianfanRelayUrl: cfg.qianfanRelayUrl,
+      localControlApiPort: cfg.localControlApiPort || 4793,
       configDir: getConfigDir(),
-
       configFilePath: getConfigFilePath(),
-
       logDir: getLogDir(),
-
-      hasCredentialsSource: hasCredentialsSource(),
-
+      cookieStorePath: getLocalCookieStorePath(),
       configComplete: isConfigComplete(cfg),
-
       autoStart: isAutoLaunchEnabled(),
     };
   });
 
   ipcMain.handle('config:save', (_e, partial: Record<string, unknown>) => {
     const current = loadConfig();
-
     const next = { ...current };
-
-    if (partial.controlServerUrl) next.controlServerUrl = String(partial.controlServerUrl);
-
-    if (partial.adminUsername) next.adminUsername = String(partial.adminUsername);
-
-    if (partial.adminPassword && partial.adminPassword !== '******')
-      next.adminPassword = String(partial.adminPassword);
-
     if (partial.scanRoot) next.scanRoot = String(partial.scanRoot);
-
-    if (partial.agentToken && !String(partial.agentToken).includes('****'))
-      next.agentToken = String(partial.agentToken);
-
-    if (partial.serviceToken && !String(partial.serviceToken).includes('****'))
-      next.serviceToken = String(partial.serviceToken);
-
+    if (partial.qianfanRelayUrl) next.qianfanRelayUrl = String(partial.qianfanRelayUrl);
+    if (partial.localControlApiPort != null) {
+      next.localControlApiPort = Number(partial.localControlApiPort) || 4793;
+    }
     saveConfig(next);
-
-    cloudClient.refreshConfig();
-    cloudClient.clearSession();
-
-    fileLog.app('配置已保存，已清空云端登录缓存');
-
+    fileLog.app('本地配置已保存');
     return { ok: true };
   });
 
-  ipcMain.handle('config:testLogin', async (_e, partial?: Record<string, unknown>) => {
-    const current = loadConfig();
-    const username = partial?.adminUsername ? String(partial.adminUsername) : current.adminUsername;
-    let password = current.adminPassword;
-    if (partial?.adminPassword && partial.adminPassword !== '******') {
-      password = String(partial.adminPassword);
-    }
-    return cloudClient.testLogin(username, password);
+  ipcMain.handle('config:resetLocalCache', () => {
+    clearLocalCookieStore();
+    return { ok: true, message: '已清空本地 Cookie 缓存' };
   });
+
+  ipcMain.handle('config:testLogin', async () => ({ ok: true, message: '本地模式无需登录' }));
 
   ipcMain.handle('config:setAutoStart', (_e, enabled: boolean) => {
     setAutoLaunch(!!enabled);
@@ -250,37 +215,15 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('config:openConfigDir', () => shell.openPath(getConfigDir()));
 
   ipcMain.handle('cloud:connect', async () => {
-    try {
-      if (!isConfigComplete(loadConfig())) {
-        return { ok: false, message: '请先在设置页配置总控地址和登录账号密码' };
-      }
-
-      await cloudClient.health();
-
-      await cloudClient.ensureLogin();
-
-      const dash = await cloudClient.dashboard();
-
-      const agents = await cloudClient.agents();
-
-      fileLog.cloud('云端连接成功');
-
-      void agentManager.ensureRunning(true);
-
-      return {
-        ok: true,
-
-        message: '云端总控连接成功',
-
-        dashboard: dash,
-
-        agentsOnline: agents.filter((a: any) => a.status === 'online').length,
-      };
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
-      fileLog.cloud(`连接失败: ${raw}`, 'error');
-      return { ok: false, message: '未连接', detail: raw.slice(0, 200) };
-    }
+    const local = loadLocalProjectsFromManifests();
+    const summary = localCookieSummary();
+    return {
+      ok: true,
+      message: '本地模式',
+      agentsOnline: 0,
+      localProjectCount: local.length,
+      cookieFound: summary.foundCount,
+    };
   });
 
   ipcMain.handle('projects:loadLocal', () => {
@@ -289,15 +232,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcMain.handle('cloud:projects', async () => {
-    await cloudClient.ensureLogin();
-
-    return cloudClient.projects();
+    return enrichProjectsWithManifests(loadLocalProjectsFromManifests() as any[]);
   });
 
   ipcMain.handle('cloud:project', async (_e, id: string) => {
-    await cloudClient.ensureLogin();
-
-    return cloudClient.project(id);
+    const p = findLocalProjectById(id);
+    if (!p) throw new Error('未找到本地项目');
+    return enrichProjectsWithManifests([p as any])[0];
   });
 
   ipcMain.handle('cloud:healthCheck', async (_e, url: string) => checkHealthUrl(url));
@@ -357,15 +298,12 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('process:start', async (_e, project: any) => {
     if (!project?.id) throw new Error('缺少项目 ID，无法启动');
-    try {
-      const detail = await cloudClient.project(project.id);
-      const payload = pickSafeProjectPayload(detail as Record<string, unknown>);
-      assertRiskAllowed(payload, 'start');
-      return processManager.start(payload);
-    } catch (e) {
-      fileLog.process(`启动失败: ${e instanceof Error ? e.message : String(e)}`, 'error');
-      throw e;
-    }
+    const local =
+      findLocalProjectById(project.id) ||
+      (project.code ? findLocalProjectById(String(project.code)) : null);
+    const payload = pickSafeProjectPayload((local || project) as Record<string, unknown>);
+    assertRiskAllowed(payload, 'start');
+    return processManager.start(payload);
   });
 
   ipcMain.handle('process:stop', async (_e, projectId: string, projectMeta?: unknown) => {
@@ -550,7 +488,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
     logDir: getLogDir(),
 
-    controlServerUrl: loadConfig().controlServerUrl,
+    localControlApiUrl: `http://127.0.0.1:${loadConfig().localControlApiPort || 4793}`,
 
     nativeHelper: getHelperStatus(),
 
@@ -559,14 +497,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     userData: app.getPath('userData'),
   }));
 
-  ipcMain.handle('cloud:qianfanShops', async (_e, opts?: { includeArchived?: boolean }) => {
-    try {
-      return await qianfanShopsForDesktop(!!opts?.includeArchived);
-    } catch {
-      const secrets = await cloudClient.secrets().catch(() => []);
-      return { shops: buildQianfanShopCards(secrets as any[]), archived: [] };
-    }
-  });
+  ipcMain.handle('cloud:qianfanShops', async (_e, opts?: { includeArchived?: boolean }) =>
+    qianfanShopsForDesktop(!!opts?.includeArchived),
+  );
+
+  ipcMain.handle('cookie:localShops', async () => qianfanShopsForDesktop());
+
+  ipcMain.handle('cookie:localSummary', async () => localCookieSummary());
 
   ipcMain.handle('cookie:testRelay', async (_e, url?: string) => testQianfanRelay(url));
 

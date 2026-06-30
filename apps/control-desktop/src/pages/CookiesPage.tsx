@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, ExternalLink, RefreshCw, BookOpen, Upload } from 'lucide-react';
+import { ChevronDown, RefreshCw, BookOpen, Upload } from 'lucide-react';
 import {
   QIANFAN_CANONICAL_SHOPS,
   qianfanCookieFreshness,
@@ -9,8 +9,8 @@ import { Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { formatRelativeTime, hashPrefix } from '@/lib/utils';
+import { qianfanStaleMessage } from '@/lib/localStatus';
 import { humanizeUserError } from '@/lib/userErrors';
-import { cookieReadFailToast } from '@/lib/cloudStatus';
 import { useAppStore } from '@/stores/appStore';
 
 type ShopRow = {
@@ -20,14 +20,11 @@ type ShopRow = {
   cookieHash?: string | null;
   cookieLength?: number | null;
   source?: string;
-  rawShopName?: string | null;
-  freshness?: string;
 };
 
 function freshnessBadgeVariant(freshness: string) {
   if (freshness === 'normal') return 'success';
   if (freshness === 'expiring' || freshness === 'stale') return 'warning';
-  if (freshness === 'cloud_required') return 'muted';
   return 'muted';
 }
 
@@ -41,9 +38,9 @@ function CookieSyncGuide({ onOpenRelay }: { onOpenRelay: () => void }) {
       </CardHeader>
       <CardContent className="space-y-3 text-sm text-muted-foreground">
         <p className="font-mono text-xs text-foreground/80">
-          千帆客服台 → 千帆中转机器人 → 云端总控 → 主播分析
+          千帆客服台 → 千帆中转机器人 → 本地 Cookie 中心 → 需要 Cookie 的本地项目
         </p>
-        <p>你平时只需要保持千帆客服台登录，必要时点一下「立即同步 Cookie」。</p>
+        <p>保持千帆客服台登录，必要时点一下「立即同步 Cookie」。</p>
         <Button size="sm" variant="secondary" onClick={onOpenRelay}>
           打开千帆中转机器人
         </Button>
@@ -53,13 +50,11 @@ function CookieSyncGuide({ onOpenRelay }: { onOpenRelay: () => void }) {
 }
 
 export function CookiesPage() {
-  const cloudConnected = useAppStore((s) => s.cloudConnected);
   const setPage = useAppStore((s) => s.setPage);
   const projects = useAppStore((s) => s.projects);
   const pushToast = useAppStore((s) => s.pushToast);
+  const setQianfanCookie = useAppStore((s) => s.setQianfanCookie);
   const [shops, setShops] = useState<ShopRow[]>([]);
-  const [archived, setArchived] = useState<ShopRow[]>([]);
-  const [showTest, setShowTest] = useState(false);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
@@ -94,45 +89,39 @@ export function CookiesPage() {
     setLoading(true);
     try {
       await checkRelay();
-      if (cloudConnected) {
-        const data = await window.zhuboDesktop.cloud.qianfanShops(showTest);
-        setShops(data.shops || data);
-        setArchived(data.archived || []);
-      }
+      const data = await window.zhuboDesktop.cookie.localShops();
+      setShops(data.shops || []);
+      const summary = await window.zhuboDesktop.cookie.localSummary();
+      setQianfanCookie(summary.latestUpdatedAt, summary.hash8 || null);
     } catch {
-      if (cloudConnected) pushToast('info', cookieReadFailToast());
+      pushToast('info', '暂时无法读取本地 Cookie 状态');
     } finally {
       setLoading(false);
     }
-  }, [cloudConnected, pushToast, showTest, checkRelay]);
+  }, [pushToast, checkRelay, setQianfanCookie]);
 
   useEffect(() => {
     void refresh();
-  }, [cloudConnected, refresh]);
+  }, [refresh]);
 
   const syncNow = async (autoRetry = false) => {
     setSyncing(true);
     try {
       let online = relayOnline;
-      if (!online) {
-        online = await checkRelay();
-      }
+      if (!online) online = await checkRelay();
       if (!online && !autoRetry) {
         const started = await window.zhuboDesktop.cookie.startRelay();
-        pushToast(started.ok ? 'info' : 'info', started.message);
+        pushToast('info', started.message);
         await new Promise((r) => setTimeout(r, 4000));
         online = await checkRelay();
       }
       if (!online) {
-        pushToast(
-          'info',
-          '同步失败：没有检测到千帆中转机器人，请先打开千帆客服台或启动千帆中转机器人',
-        );
+        pushToast('info', '千帆中转机器人未运行，请先启动。');
         return;
       }
 
       const res = await window.zhuboDesktop.cookie.syncNow();
-      if (cloudConnected) await refresh();
+      await refresh();
 
       const total = res.total ?? 4;
       const success = res.success ?? 0;
@@ -143,29 +132,17 @@ export function CookiesPage() {
           'info',
           `Cookie 部分同步成功：${success}/${total} 店成功，请确认千帆客服台是否打开`,
         );
-      } else if (!res.relayOnline) {
-        pushToast(
-          'info',
-          '同步失败：没有检测到千帆中转机器人，请先打开千帆客服台或启动千帆中转机器人',
-        );
       } else {
-        pushToast(
-          'info',
-          res.message || '同步失败：没有检测到千帆客服台，请先打开千帆客服台或启动千帆中转机器人',
-        );
+        pushToast('info', res.message || '同步失败，请先打开千帆客服台');
       }
     } catch (e) {
-      pushToast('info', humanizeUserError(e instanceof Error ? e.message : String(e), 'cloud'));
+      pushToast('info', humanizeUserError(e instanceof Error ? e.message : String(e), 'native'));
     } finally {
       setSyncing(false);
     }
   };
 
   const pasteUpload = async () => {
-    if (!cloudConnected) {
-      pushToast('info', '请先连接云端后再手动上传 Cookie');
-      return;
-    }
     setPasteUploading(true);
     try {
       const res = await window.zhuboDesktop.cookie.pasteUpload({
@@ -173,7 +150,7 @@ export function CookiesPage() {
         cookie: pasteText,
       });
       if (res.ok) {
-        pushToast('success', `已上传 ${pasteShop} · hash ${res.hash8} · 长度 ${res.length}`);
+        pushToast('success', `已保存 ${pasteShop} · hash ${res.hash8} · 长度 ${res.length}`);
         setPasteText('');
         await refresh();
       } else {
@@ -190,11 +167,7 @@ export function CookiesPage() {
       : QIANFAN_CANONICAL_SHOPS.map((name) => ({ shopName: name, found: false }));
 
   const foundCount = shopCards.filter((s) => s.found).length;
-  const autoSyncLabel = lastAutoSync
-    ? `${formatRelativeTime(lastAutoSync)}前`
-    : relayOnline
-      ? '等待首次同步'
-      : '—';
+  const autoSyncLabel = lastAutoSync ? `${formatRelativeTime(lastAutoSync)}前` : '—';
 
   return (
     <div className="space-y-4 p-6">
@@ -202,12 +175,10 @@ export function CookiesPage() {
         <div>
           <h1 className="text-2xl font-semibold">Cookie 状态</h1>
           <p className="text-sm text-muted-foreground">
-            {cloudConnected
-              ? `正式四店 · 已同步 ${foundCount}/4 店`
-              : 'Cookie 同步需要连接云端，因为主播分析等系统要从云端读取 Cookie。'}
+            正式四店 · 已同步 {foundCount}/4 店 · 本地 Cookie 中心
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            自动同步：{relayOnline ? '已开启' : '等待千帆中转机器人'}
+            自动同步：{relayOnline ? '已开启' : '需启动千帆中转机器人'}
             {relayOnline ? ` · 上次自动同步：${autoSyncLabel}` : ''}
           </p>
         </div>
@@ -218,48 +189,8 @@ export function CookiesPage() {
           <Button size="sm" variant="secondary" onClick={refresh} disabled={loading || syncing}>
             <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> 刷新状态
           </Button>
-          {cloudConnected && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => window.zhuboDesktop.cloud.openSecretsPage()}
-            >
-              <ExternalLink className="h-3 w-3" /> 云端 Cookie 管理
-            </Button>
-          )}
         </div>
       </div>
-
-      {!cloudConnected && (
-        <Card className="border-border/60">
-          <CardContent className="space-y-3 py-4 text-sm text-muted-foreground">
-            <p>
-              连接云端后可查看四店 Cookie 状态与上传记录。本地仍可触发同步（由千帆中转机器人上传）。
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => setPage('settings')}>
-                去设置云端连接
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={async () => {
-                  const r = (await window.zhuboDesktop.config.testLogin()) as {
-                    ok: boolean;
-                    message: string;
-                  };
-                  pushToast(r.ok ? 'success' : 'info', r.message);
-                }}
-              >
-                测试连接
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setShowGuide((v) => !v)}>
-                查看推送说明
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {relayOnline === false && (
         <Card className="border-amber-500/20 bg-amber-500/5">
@@ -283,77 +214,44 @@ export function CookiesPage() {
 
       {showGuide && <CookieSyncGuide onOpenRelay={openRelayProject} />}
 
-      {cloudConnected && (
-        <>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={showTest}
-                onChange={(e) => setShowTest(e.target.checked)}
-              />
-              显示测试/历史 Cookie
-            </label>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            {shopCards.map((s) => {
-              const freshness = qianfanCookieFreshness(s.updatedAt, !!s.found, true);
-              const label = qianfanCookieStatusLabel(freshness);
-              const variant = freshnessBadgeVariant(freshness);
-              return (
-                <div key={s.shopName} className="glass rounded-lg p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium">{s.shopName}</div>
-                    <Badge variant={variant}>{label}</Badge>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {shopCards.map((s) => {
+          const freshness = qianfanCookieFreshness(s.updatedAt, !!s.found, true);
+          const label = qianfanCookieStatusLabel(freshness);
+          return (
+            <div key={s.shopName} className="glass rounded-lg p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-medium">{s.shopName}</div>
+                <Badge variant={freshnessBadgeVariant(freshness)}>{label}</Badge>
+              </div>
+              <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                <div>最后更新：{s.updatedAt ? formatRelativeTime(s.updatedAt) : '—'}</div>
+                <div>来源：{s.source || '千帆中转机器人'}</div>
+                {s.cookieHash && <div>hash8：{hashPrefix(s.cookieHash)}</div>}
+                {s.cookieLength != null && s.cookieLength > 0 && <div>长度：{s.cookieLength}</div>}
+                {s.found && (
+                  <div className="text-foreground/80">
+                    {qianfanStaleMessage(s.updatedAt || null)}
                   </div>
-                  <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                    <div>最后更新：{s.updatedAt ? formatRelativeTime(s.updatedAt) : '—'}</div>
-                    <div>来源：{s.source || '千帆中转机器人'}</div>
-                    {s.cookieHash && <div>hash8：{hashPrefix(s.cookieHash)}</div>}
-                    {s.cookieLength != null && s.cookieLength > 0 && (
-                      <div>长度：{s.cookieLength}</div>
-                    )}
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button size="sm" variant="ghost" onClick={refresh} disabled={loading}>
-                      刷新
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => syncNow(false)}
-                      disabled={syncing}
-                    >
-                      立即同步
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {showTest && archived.length > 0 && (
-            <div className="space-y-2">
-              <h2 className="text-sm font-medium text-muted-foreground">测试 / 历史 Cookie</h2>
-              <div className="grid gap-2">
-                {archived.map((s) => (
-                  <div
-                    key={String(s.shopName)}
-                    className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground"
-                  >
-                    <div className="font-medium text-foreground">{s.shopName || s.rawShopName}</div>
-                    <div>
-                      hash8：{hashPrefix(s.cookieHash)} · 更新：
-                      {s.updatedAt ? formatRelativeTime(s.updatedAt) : '—'}
-                    </div>
-                  </div>
-                ))}
+                )}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" variant="ghost" onClick={refresh} disabled={loading}>
+                  刷新
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => syncNow(false)}
+                  disabled={syncing}
+                >
+                  立即同步
+                </Button>
               </div>
             </div>
-          )}
-        </>
-      )}
+          );
+        })}
+      </div>
 
       <Card className="border-border/60">
         <button
@@ -392,16 +290,9 @@ export function CookiesPage() {
                 placeholder="仅在自动同步不可用时粘贴"
               />
             </label>
-            <Button
-              size="sm"
-              onClick={pasteUpload}
-              disabled={pasteUploading || !cloudConnected || !pasteText.trim()}
-            >
-              <Upload className="h-3 w-3" /> 上传
+            <Button size="sm" onClick={pasteUpload} disabled={pasteUploading || !pasteText.trim()}>
+              <Upload className="h-3 w-3" /> 保存到本地
             </Button>
-            {!cloudConnected && (
-              <p className="text-xs text-muted-foreground">请先连接云端后再手动上传。</p>
-            )}
           </CardContent>
         )}
       </Card>

@@ -7,18 +7,14 @@ export function WebPage() {
   const projects = useAppStore((s) => s.projects);
   const pushToast = useAppStore((s) => s.pushToast);
 
-  const urls = [
-    { name: '云端总控', url: 'http://8.137.126.18/control/' },
-    { name: '云端主播分析', url: 'http://8.137.126.18/' },
-    ...(projects
-      .map((p) => {
+  const urls = projects
+    .map((p) => {
         const url =
           p.healthUrl?.replace(/\/api\/health\/?$/, '') ||
           (p.ports?.[0] ? `http://127.0.0.1:${p.ports[0].port}` : null);
-        return url ? { name: p.name, url, id: p.id } : null;
-      })
-      .filter(Boolean) as { name: string; url: string; id?: string }[]),
-  ];
+      return url ? { name: p.name, url, id: p.id } : null;
+    })
+    .filter(Boolean) as { name: string; url: string; id?: string }[];
 
   return (
     <div className="space-y-4 p-6">

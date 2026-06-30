@@ -45,7 +45,6 @@ export function AccessUrlCard({
       url: project.localHealthUrl || project.healthUrl,
       kind: 'health',
     },
-    { label: '云端地址', url: (project as any).publicUrl, kind: 'cloud' },
     { label: 'API 地址', url: (project as any).internalUrl, kind: 'api' },
   ].filter((r) => r.url && !/xiangyuzhubao\.xyz/i.test(String(r.url)));
 
@@ -71,7 +70,7 @@ export function AccessUrlCard({
 
       {!hasAny ? (
         <p className="text-xs text-muted-foreground">
-          还没有配置访问地址，请在云端项目配置 localWebUrl。
+          还没有配置访问地址，请在项目 manifest 中配置 localWebUrl。
         </p>
       ) : (
         <div className="space-y-2">

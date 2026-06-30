@@ -36,3 +36,12 @@ export function loadLocalProjectsFromManifests(): Array<Record<string, unknown>>
 
   return projects;
 }
+
+export function findLocalProjectById(projectId: string) {
+  const projects = loadLocalProjectsFromManifests();
+  return (
+    projects.find((p) => p.id === projectId) ||
+    projects.find((p) => `local-${p.code}` === projectId) ||
+    projects.find((p) => p.code === projectId)
+  );
+}

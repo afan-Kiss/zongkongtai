@@ -12,6 +12,7 @@ export interface DesktopConfig {
   serviceToken: string;
   scanRoot: string;
   qianfanRelayUrl: string;
+  localControlApiPort: number;
   importedFromCredentials?: boolean;
   configVersion?: number;
 }
@@ -42,6 +43,7 @@ const DEFAULTS: DesktopConfig = {
   serviceToken: '',
   scanRoot: 'E:\\我的软件源码',
   qianfanRelayUrl: 'http://127.0.0.1:9323',
+  localControlApiPort: 4793,
   configVersion: CONFIG_VERSION,
 };
 
@@ -232,5 +234,5 @@ export function maskToken(value?: string) {
 }
 
 export function isConfigComplete(cfg: DesktopConfig) {
-  return !!(cfg.controlServerUrl && cfg.adminUsername && cfg.adminPassword);
+  return !!cfg.scanRoot?.trim();
 }

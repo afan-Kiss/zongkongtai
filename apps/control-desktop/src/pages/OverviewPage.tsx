@@ -6,16 +6,14 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { ProjectCard } from '@/components/ProjectCard';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
-import { qianfanStaleMessage } from '@/hooks/useCloudBootstrap';
+import { qianfanStaleMessage } from '@/lib/localStatus';
 import { dailyFeaturedProjects } from '@/lib/projectDedup';
-import { cloudFailToastMessage } from '@/lib/cloudStatus';
 import type { HealthCheckReport } from '@zhubo/control-shared';
 
 const HEALTH_CACHE_KEY = 'zhubo:lastHealthReport';
 
 export function OverviewPage() {
   const projects = useAppStore((s) => s.projects);
-  const cloudConnected = useAppStore((s) => s.cloudConnected);
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
@@ -27,20 +25,18 @@ export function OverviewPage() {
 
   const featured = dailyFeaturedProjects(projects);
   const localOk = projects.length > 0;
-
-  const cookieSummary = qianfanStaleMessage(qianfanCookieUpdatedAt, cloudConnected);
+  const cookieSummary = qianfanStaleMessage(qianfanCookieUpdatedAt);
 
   const refresh = async () => {
     setRefreshing(true);
     try {
-      await window.zhuboDesktop.projects.loadLocal().then((local) => {
-        if (local?.length) useAppStore.getState().setProjects(local as any);
-      });
-      const conn = await window.zhuboDesktop.cloud.connect();
-      if (!conn.ok) pushToast('info', cloudFailToastMessage());
-      else pushToast('success', '状态已刷新');
+      const local = await window.zhuboDesktop.projects.loadLocal();
+      if (local?.length) useAppStore.getState().setProjects(local as any);
+      const summary = await window.zhuboDesktop.cookie.localSummary();
+      useAppStore.getState().setQianfanCookie(summary.latestUpdatedAt, summary.hash8 || null);
+      pushToast('success', '状态已刷新');
     } catch {
-      pushToast('info', cloudFailToastMessage());
+      pushToast('info', '刷新失败，请稍后重试');
     } finally {
       setRefreshing(false);
     }
@@ -72,7 +68,7 @@ export function OverviewPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">总览</h1>
-          <p className="text-sm text-muted-foreground">本地优先 · 常用项目 · 刷新状态 · 简单体检</p>
+          <p className="text-sm text-muted-foreground">本地项目 · 常用入口 · 简单体检</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={refresh} disabled={refreshing}>
@@ -87,39 +83,22 @@ export function OverviewPage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card>
           <CardHeader>
-            <div className="text-sm text-muted-foreground">本地总控</div>
+            <div className="text-sm text-muted-foreground">本地项目</div>
             <div className={`text-lg font-medium ${localOk ? 'text-green-400' : 'text-amber-400'}`}>
-              {localOk ? '正常' : '待扫描'}
+              {localOk ? `${projects.length} 个` : '待扫描'}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">本地项目、Git、终端可用</div>
+            <div className="mt-1 text-xs text-muted-foreground">来自本地 manifest 扫描</div>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
-            <div className="text-sm text-muted-foreground">云端同步</div>
+            <div className="text-sm text-muted-foreground">Cookie</div>
             <div
-              className={`text-lg font-medium ${cloudConnected ? 'text-green-400' : 'text-muted-foreground'}`}
-            >
-              {cloudConnected ? '已连接' : '未连接'}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {cloudConnected ? 'Cookie 与远程状态已同步' : '不影响本地使用'}
-            </div>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <div className="text-sm text-muted-foreground">Cookie 同步</div>
-            <div
-              className={`text-sm font-medium ${
-                !cloudConnected
-                  ? 'text-muted-foreground'
-                  : qianfanCookieUpdatedAt
-                    ? 'text-green-400'
-                    : 'text-amber-400'
+              className={`text-lg font-medium ${
+                qianfanCookieUpdatedAt ? 'text-green-400' : 'text-amber-400'
               }`}
             >
-              {!cloudConnected ? '需连接云端' : qianfanCookieUpdatedAt ? '正常' : '暂未收到'}
+              {qianfanCookieUpdatedAt ? '正常' : '未收到'}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">{cookieSummary}</div>
           </CardHeader>
@@ -150,21 +129,22 @@ export function OverviewPage() {
             </div>
           </CardHeader>
         </Card>
+        <Card>
+          <CardHeader>
+            <div className="text-sm text-muted-foreground">Git / 终端</div>
+            <div className="text-lg font-medium text-green-400">本地可用</div>
+            <div className="mt-1 text-xs text-muted-foreground">无需联网即可使用</div>
+          </CardHeader>
+        </Card>
       </div>
 
       <div>
-        <h2 className="mb-3 font-medium">日常常用项目</h2>
-        {featured.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            暂无匹配项目。可到「项目」页从 manifest 导入，或检查设置里的扫描根目录。
-          </p>
-        ) : (
-          <motion.div layout className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {featured.map((p) => (
-              <ProjectCard key={p.id} project={p} />
-            ))}
-          </motion.div>
-        )}
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">今日常用项目</h2>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {featured.map((p) => (
+            <ProjectCard key={p.id} project={p} />
+          ))}
+        </div>
       </div>
     </div>
   );

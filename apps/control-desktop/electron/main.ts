@@ -1,13 +1,12 @@
 import { app, BrowserWindow, dialog, shell } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
-import { setupCloudWebRequest } from './cloud-client';
 import { initConfig } from './config';
 import { initFileLogger, fileLog } from './file-logger';
 import { applyAutoLaunchFromConfig } from './auto-launch';
 import { processManager } from './process-manager';
-import { agentManager } from './agent-manager';
 import { readProjectManifest } from './manifest-scanner';
+import { startLocalControlApi } from './local-control-api';
 import { DEFAULT_RISK_BY_CODE } from '../../../packages/control-shared/src/steward';
 
 process.on('uncaughtException', (err) => {
@@ -73,7 +72,7 @@ function createWindow() {
   });
 
   registerIpcHandlers(() => mainWindow);
-  setupCloudWebRequest(mainWindow);
+  void startLocalControlApi();
 
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     console.error('[renderer] crashed', details);
@@ -111,7 +110,6 @@ app.whenReady().then(() => {
   applyAutoLaunchFromConfig();
   fileLog.app(`启动 v${app.getVersion()} path=${process.execPath}`);
   createWindow();
-  setTimeout(() => void agentManager.ensureRunning(true), 2500);
 });
 
 app.on('before-quit', async (e) => {

@@ -6,7 +6,7 @@ import type {
 } from '../../../packages/control-shared/src/steward';
 import { cloudClient } from './cloud-client';
 import { agentManager } from './agent-manager';
-import { testQianfanRelay } from './cookie-sync';
+import { testQianfanRelay, qianfanShopsForDesktop } from './cookie-sync';
 import { inspectLegacy4791Async, closeLegacy4791 } from './port-4791';
 import { getScanRoot, scanManifestsLocal, readProjectManifest } from './manifest-scanner';
 import { loadConfig } from './config';
@@ -327,9 +327,8 @@ export function checkExeConfig(): HealthCheckItem[] {
     item({
       id: 'exe_config',
       title: 'EXE 配置完整性',
-      status: cfg.controlServerUrl && cfg.scanRoot ? 'ok' : 'warn',
-      message:
-        cfg.controlServerUrl && cfg.scanRoot ? '配置完整' : '缺少 controlServerUrl 或 scanRoot',
+      status: cfg.scanRoot ? 'ok' : 'warn',
+      message: cfg.scanRoot ? '扫描根目录已配置' : '请在设置中配置扫描根目录',
       category: 'config',
     }),
     item({
@@ -355,18 +354,95 @@ function summarize(items: HealthCheckItem[]): HealthCheckReport {
   };
 }
 
-/** 简单体检 — 本地优先，云端/Cookie 可选 */
+/** 简单体检 — 纯本地 */
 export async function runHealthCheckSimple(signal?: AbortSignal): Promise<HealthCheckReport> {
   const localProjects = loadLocalProjectsFromManifests();
   const items: HealthCheckItem[] = [
     checkLocalManifests(),
     await checkGitQuick(localProjects as Parameters<typeof checkGitQuick>[0], signal),
     await checkPorts(signal),
-    checkAgentSimple(),
-    await checkCloudOptional(),
-    await checkCookieOptional(),
+    await checkRelayOptional(),
+    await checkLocalCookieOptional(),
+    ...(await checkLocalProjectHealth(localProjects)),
   ];
   return summarize(items);
+}
+
+export async function checkRelayOptional(): Promise<HealthCheckItem> {
+  const relay = await testQianfanRelay();
+  return item({
+    id: 'qianfan_relay',
+    title: '千帆中转机器人',
+    status: relay.ok ? 'ok' : 'warn',
+    message: relay.ok ? '千帆中转机器人已连接' : '千帆中转机器人未运行，自动同步不可用。',
+    repairAction: relay.ok ? undefined : 'nav:cookies',
+    repairable: !relay.ok,
+    category: 'cookie',
+  });
+}
+
+export async function checkLocalCookieOptional(): Promise<HealthCheckItem> {
+  const relay = await testQianfanRelay();
+  const data = qianfanShopsForDesktop();
+  const shops = (data.shops || []) as Array<{ found?: boolean; stale?: boolean }>;
+  const found = shops.filter((s) => s.found);
+  const staleCount = found.filter((s) => s.stale).length;
+  const missing = 4 - found.length;
+
+  if (!relay.ok) {
+    return item({
+      id: 'qianfan_cookie',
+      title: 'Cookie 同步',
+      status: 'warn',
+      message: '千帆中转机器人未运行，自动同步不可用。',
+      repairAction: 'nav:cookies',
+      repairable: true,
+      category: 'cookie',
+    });
+  }
+  if (found.length >= 4 && staleCount === 0) {
+    return item({
+      id: 'qianfan_cookie',
+      title: 'Cookie 同步',
+      status: 'ok',
+      message: '四店 Cookie 正常。',
+      category: 'cookie',
+    });
+  }
+  if (missing > 0) {
+    return item({
+      id: 'qianfan_cookie',
+      title: 'Cookie 同步',
+      status: 'warn',
+      message: '有店铺 Cookie 未收到，请打开千帆客服台后点立即同步 Cookie。',
+      repairAction: 'nav:cookies',
+      repairable: true,
+      category: 'cookie',
+    });
+  }
+  return item({
+    id: 'qianfan_cookie',
+    title: 'Cookie 同步',
+    status: 'warn',
+    message: 'Cookie 太久没更新，建议立即同步。',
+    repairAction: 'nav:cookies',
+    repairable: true,
+    category: 'cookie',
+  });
+}
+
+async function checkLocalProjectHealth(
+  projects: Array<{
+    code?: string;
+    name?: string;
+    localHealthUrl?: string | null;
+    healthUrl?: string | null;
+  }>,
+): Promise<HealthCheckItem[]> {
+  const targets = projects.filter((p) =>
+    ['zhubo-analysis', 'jade-accounting', 'jade-scan', 'xiangyu-system'].includes(p.code || ''),
+  );
+  return checkProjectHealth(targets);
 }
 
 export function checkLocalManifests(): HealthCheckItem {

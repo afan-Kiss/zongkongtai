@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { loadConfig } from './config';
-import { cloudClient } from './cloud-client';
 import { loadLocalProjectsFromManifests } from './local-projects';
+import { getLocalCookieSummary, listLocalCookieCards, saveLocalCookie } from './local-cookie-store';
 import { processManager } from './process-manager';
 import { pickSafeProjectPayload } from './ipc-security';
 import { isPortListeningAsync } from './port-manager';
@@ -14,6 +14,7 @@ export interface CookieSyncShopResult {
   length: number;
   updatedAt: string | null;
   message: string;
+  cookie?: string;
 }
 
 export interface CookieSyncResult {
@@ -36,7 +37,7 @@ export async function testQianfanRelay(url?: string): Promise<{ ok: boolean; mes
   const base = normalizeRelayBase(url);
   try {
     const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(5000) });
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; service?: string };
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
     if (res.ok && data.ok !== false) {
       return { ok: true, message: '千帆中转机器人已连接。' };
     }
@@ -51,13 +52,32 @@ export async function fetchRelayAutoStatus(url?: string) {
   try {
     const res = await fetch(`${base}/api/cookie/status`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
-    return (await res.json()) as {
-      lastAutoSyncAt?: string | null;
-      autoSyncEnabled?: boolean;
-    };
+    return (await res.json()) as { lastAutoSyncAt?: string | null; autoSyncEnabled?: boolean };
   } catch {
     return null;
   }
+}
+
+function persistSyncResults(shops: CookieSyncShopResult[]) {
+  let saved = 0;
+  for (const shop of shops) {
+    if (!shop.ok || !shop.cookie || shop.cookie.length < 20) continue;
+    try {
+      saveLocalCookie({
+        shopName: shop.shopName,
+        cookie: shop.cookie,
+        source: '千帆中转机器人',
+        cookieHash: shop.hash8 ? undefined : undefined,
+      });
+      saved += 1;
+    } catch (e) {
+      fileLog.app(
+        `本地 Cookie 保存失败 shop=${shop.shopName}: ${e instanceof Error ? e.message : String(e)}`,
+        'error',
+      );
+    }
+  }
+  return saved;
 }
 
 export async function syncCookieViaRelay(url?: string): Promise<CookieSyncResult> {
@@ -67,7 +87,7 @@ export async function syncCookieViaRelay(url?: string): Promise<CookieSyncResult
     return {
       ok: false,
       shops: [],
-      message: '同步失败：没有检测到千帆中转机器人，请先打开千帆客服台或启动千帆中转机器人',
+      message: '千帆中转机器人未运行，请先启动。',
       relayOnline: false,
     };
   }
@@ -80,10 +100,12 @@ export async function syncCookieViaRelay(url?: string): Promise<CookieSyncResult
       signal: AbortSignal.timeout(120000),
     });
     const data = (await res.json().catch(() => ({}))) as CookieSyncResult;
-    fileLog.app(`Cookie 同步 relay success=${data.success ?? 0}/${data.total ?? 0} ok=${data.ok}`);
+    const shops = Array.isArray(data.shops) ? data.shops : [];
+    const saved = persistSyncResults(shops);
+    fileLog.app(`Cookie 同步完成 relay=${data.success ?? 0}/${data.total ?? 0} saved=${saved}`);
     return {
       ...data,
-      shops: Array.isArray(data.shops) ? data.shops : [],
+      shops: shops.map(({ cookie: _c, ...rest }) => rest),
       relayOnline: true,
       message: data.message || (data.ok ? 'Cookie 已同步' : '同步失败'),
     };
@@ -93,7 +115,7 @@ export async function syncCookieViaRelay(url?: string): Promise<CookieSyncResult
     return {
       ok: false,
       shops: [],
-      message: '同步失败：没有检测到千帆客服台，请先打开千帆客服台或启动千帆中转机器人',
+      message: '同步失败，请先打开千帆客服台',
       relayOnline: true,
     };
   }
@@ -107,56 +129,30 @@ export async function pasteUploadCookie(
   shopName: string,
   cookie: string,
 ): Promise<{ ok: boolean; hash8: string; length: number; message: string }> {
-  const cfg = loadConfig();
-  const token = cfg.serviceToken?.trim();
-  if (!token) {
-    return { ok: false, hash8: '', length: 0, message: '未配置 Service Token，无法上传' };
-  }
   const normalized = String(cookie || '').trim();
   if (normalized.length < 20) {
     return { ok: false, hash8: '', length: 0, message: 'Cookie 内容太短' };
   }
-  const base = cfg.controlServerUrl.replace(/\/$/, '');
   const cookieHash = hashCookie(normalized);
   try {
-    const res = await fetch(`${base}/api/secrets/qianfan/upload-cookie`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        'x-service-token': token,
-      },
-      body: JSON.stringify({
-        platform: 'qianfan',
-        shopName,
-        cookie: normalized,
-        cookieHash,
-        source: 'manual-paste',
-        collectorProject: '本地总控手动上传',
-      }),
-      signal: AbortSignal.timeout(30000),
+    saveLocalCookie({
+      shopName,
+      cookie: normalized,
+      source: '手动粘贴',
+      cookieHash,
     });
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!res.ok) {
-      return {
-        ok: false,
-        hash8: cookieHash.slice(0, 8),
-        length: normalized.length,
-        message: data.error || `上传失败 ${res.status}`,
-      };
-    }
     return {
       ok: true,
       hash8: cookieHash.slice(0, 8),
       length: normalized.length,
-      message: '上传成功',
+      message: '已保存到本地',
     };
   } catch (e) {
     return {
       ok: false,
       hash8: cookieHash.slice(0, 8),
       length: normalized.length,
-      message: e instanceof Error ? e.message : '上传失败',
+      message: e instanceof Error ? e.message : '保存失败',
     };
   }
 }
@@ -179,25 +175,16 @@ export async function startQianfanRelay(): Promise<{ ok: boolean; message: strin
   return { ok: true, message: '正在启动千帆中转机器人…' };
 }
 
-export async function isRelayPortOpen(url?: string) {
-  const base = normalizeRelayBase(url);
-  try {
-    const u = new URL(base);
-    const port = Number(u.port || (u.protocol === 'https:' ? 443 : 80));
-    return isPortListeningAsync(port, u.hostname || '127.0.0.1');
-  } catch {
-    return false;
-  }
+export function qianfanShopsForDesktop(includeArchived = false) {
+  return listLocalCookieCards(includeArchived);
 }
 
-export async function qianfanShopsForDesktop(includeArchived = false) {
-  try {
-    await cloudClient.ensureLogin();
-    return cloudClient.qianfanShops(includeArchived);
-  } catch {
-    const cfg = loadConfig();
-    const token = cfg.serviceToken?.trim();
-    if (!token) throw new Error('云端未连接');
-    return cloudClient.qianfanShopsWithServiceToken(includeArchived);
-  }
+export function localCookieSummary() {
+  const summary = getLocalCookieSummary();
+  const cards = listLocalCookieCards();
+  const first = cards.shops.find((s) => s.cookieHash);
+  return {
+    ...summary,
+    hash8: first?.cookieHash ? String(first.cookieHash).slice(0, 8) : null,
+  };
 }

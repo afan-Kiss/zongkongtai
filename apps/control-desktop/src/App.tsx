@@ -4,7 +4,7 @@ import { RightPanel } from '@/components/ProjectCard';
 import { TerminalPanel } from '@/components/TerminalPanel';
 import { ErrorBoundary, PageErrorBoundary } from '@/components/ErrorBoundary';
 import { useAppStore } from '@/stores/appStore';
-import { useCloudBootstrap } from '@/hooks/useCloudBootstrap';
+import { useLocalBootstrap } from '@/hooks/useLocalBootstrap';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { WorkspacePage } from '@/pages/WorkspacePage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
@@ -23,7 +23,6 @@ import { AboutPage } from '@/pages/AboutPage';
 import { GlobalTaskBar } from '@/components/GlobalTaskBar';
 import { PortConflictDialog } from '@/components/PortConflictDialog';
 import { TooltipProvider } from '@/components/ui/Tooltip';
-import { CloudOfflineBanner } from '@/components/CloudOfflineBanner';
 import type { NavPage } from '@/types/desktop';
 
 const PAGES: Record<NavPage, React.ComponentType> = {
@@ -85,7 +84,7 @@ export default function App() {
   const page = useAppStore((s) => s.page);
   const setPage = useAppStore((s) => s.setPage);
   const terminalFullscreen = useAppStore((s) => s.terminalFullscreen);
-  useCloudBootstrap();
+  useLocalBootstrap();
 
   if (terminalFullscreen) {
     return (
@@ -105,7 +104,6 @@ export default function App() {
             <div className="flex min-w-0 flex-1 flex-col">
               <TopBar />
               <GlobalTaskBar />
-              <CloudOfflineBanner />
               <div className="flex min-h-0 flex-1">
                 <main className="min-w-0 flex-1 overflow-auto">
                   <AnimatePresence mode="wait">

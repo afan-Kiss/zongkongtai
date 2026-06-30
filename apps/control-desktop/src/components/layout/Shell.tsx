@@ -10,7 +10,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { cloudBarText, cloudHintMessage, cookieBarState } from '@/lib/cloudStatus';
+import { cookieBarState } from '@/lib/localStatus';
 import { useAppStore } from '@/stores/appStore';
 import type { NavPage } from '@/types/desktop';
 import { useEffect, useState } from 'react';
@@ -35,7 +35,7 @@ export function Sidebar() {
     <aside className="flex w-52 flex-col border-r border-border bg-card/40 p-3">
       <div className="mb-5 px-2">
         <div className="text-lg font-semibold tracking-tight">珠宝本地总控</div>
-        <div className="text-xs text-muted-foreground">简洁 · 稳定 · 好用</div>
+        <div className="text-xs text-muted-foreground">本地项目、Git、端口、Cookie、终端管理</div>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5">
         {MAIN_NAV.map(({ id, label, icon: Icon }) => (
@@ -71,12 +71,11 @@ function VersionFooter() {
 }
 
 export function TopBar() {
-  const cloudConnected = useAppStore((s) => s.cloudConnected);
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const runningCount = useAppStore((s) => s.runningCount);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
-  const pushToast = useAppStore((s) => s.pushToast);
+  const projects = useAppStore((s) => s.projects);
   const setPage = useAppStore((s) => s.setPage);
 
   const portLabel = portAnalysis?.topBarLabel || '端口';
@@ -85,7 +84,9 @@ export function TopBar() {
   const portClickable = portAnalysis?.topBarClickable ?? false;
   const portWarn = !portOk || (portAnalysis?.duplicateCount ?? 0) > 0;
 
-  const cookie = cookieBarState(cloudConnected, qianfanCookieUpdatedAt);
+  const localOk = projects.length > 0;
+  const cookieFound = qianfanCookieUpdatedAt ? 4 : 0;
+  const cookie = cookieBarState(qianfanCookieUpdatedAt, cookieFound);
 
   const items: Array<{
     label: string;
@@ -95,22 +96,14 @@ export function TopBar() {
     clickable?: boolean;
     onClick?: () => void;
   }> = [
-    { label: '本地模式', ok: true, text: '正常' },
-    {
-      label: '云端',
-      ok: cloudConnected,
-      text: cloudBarText(cloudConnected),
-      warn: !cloudConnected,
-      clickable: !cloudConnected,
-      onClick: !cloudConnected ? () => pushToast('info', cloudHintMessage()) : undefined,
-    },
+    { label: '本地模式', ok: localOk, text: localOk ? '正常' : '待扫描', warn: !localOk },
     {
       label: 'Cookie',
       ok: cookie.ok,
       text: cookie.text,
       warn: cookie.warn,
-      clickable: !cloudConnected,
-      onClick: !cloudConnected ? () => setPage('settings') : undefined,
+      clickable: true,
+      onClick: () => setPage('cookies'),
     },
     {
       label: portLabel,

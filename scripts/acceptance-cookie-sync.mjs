@@ -29,11 +29,11 @@ if (!cookies.includes('高级：手动粘贴 Cookie')) {
 if (/document\.cookie|完整 Cookie|cookie:\s*['"]/.test(cookies)) {
   failures.push('CookiesPage must not display full cookie literals');
 }
-if (!cookies.includes('Cookie 同步需要连接云端')) {
-  failures.push('CookiesPage cloud disconnected must show soft message');
+if (!cookies.includes('本地 Cookie 中心')) {
+  failures.push('CookiesPage must describe local cookie center');
 }
-if (cookies.includes('总控台还没有 Cookie 数据') || cookies.includes('Cookie 无')) {
-  failures.push('CookiesPage must not show harsh cookie missing errors');
+if (cookies.includes('连接云端') || cookies.includes('云端总控')) {
+  failures.push('CookiesPage must not mention cloud');
 }
 if (!cookies.includes('正在同步 Cookie')) {
   failures.push('CookiesPage must show syncing label');
@@ -69,8 +69,8 @@ const cookieSync = read(path.join(ELECTRON, 'cookie-sync.ts'));
 if (cookieSync.includes('console.log') && cookieSync.match(/cookie[^H]/i)?.[0]?.includes('log')) {
   /* ok if only structured logs */
 }
-if (!cookieSync.includes('/api/cookie/sync-now')) {
-  failures.push('cookie-sync must call relay sync-now endpoint');
+if (!cookieSync.includes('local-cookie-store')) {
+  failures.push('cookie-sync must use local cookie store');
 }
 
 let botApi = '';

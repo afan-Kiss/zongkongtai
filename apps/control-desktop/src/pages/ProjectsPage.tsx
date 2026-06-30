@@ -119,19 +119,19 @@ export function ProjectsPage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
           <h1 className="mr-auto text-lg font-semibold">项目</h1>
-          <Tooltip content="从云端总控重新拉取项目列表">
+          <Tooltip content="重新扫描本地 manifest 并刷新项目列表">
             <Button size="sm" variant="secondary" disabled={!!busy} onClick={refreshList}>
               <RefreshCw className={`h-3.5 w-3.5 ${busy === 'refresh' ? 'animate-spin' : ''}`} />
               刷新项目清单
             </Button>
           </Tooltip>
-          <Tooltip content="扫描 E:\\我的软件源码 并上传端口/启动命令到总控（需 Agent 或本机源码）">
+          <Tooltip content="扫描设置中的根目录，读取各项目 manifest 与端口">
             <Button size="sm" variant="secondary" disabled={!!busy} onClick={rescanDisk}>
               <FolderSync className={`h-3.5 w-3.5 ${busy === 'rescan' ? 'animate-spin' : ''}`} />
               重新扫描 E 盘项目
             </Button>
           </Tooltip>
-          <Tooltip content="读取各项目 zhubo-control.manifest.json 并导入总控档案">
+          <Tooltip content="读取各项目 zhubo-control.manifest.json 并更新本地缓存">
             <Button size="sm" variant="secondary" disabled={!!busy} onClick={importManifests}>
               <Upload className="h-3.5 w-3.5" />从 manifest 导入
             </Button>

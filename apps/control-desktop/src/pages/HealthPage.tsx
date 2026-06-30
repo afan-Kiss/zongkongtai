@@ -28,8 +28,7 @@ const SIMPLE_IDS = new Set([
   'local_manifest',
   'git_unpushed',
   'ports',
-  'agent_online',
-  'cloud',
+  'qianfan_relay',
   'qianfan_cookie',
 ]);
 

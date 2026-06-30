@@ -267,7 +267,6 @@ export function ProjectCard({ project }: { project: Project }) {
 export function RightPanel() {
   const selectedId = useAppStore((s) => s.selectedProjectId);
   const projects = useAppStore((s) => s.projects);
-  const cloudConnected = useAppStore((s) => s.cloudConnected);
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const setPage = useAppStore((s) => s.setPage);
@@ -306,15 +305,8 @@ export function RightPanel() {
       <aside className="w-72 space-y-4 border-l border-border p-4 text-sm">
         <h3 className="font-medium text-foreground">今日建议</h3>
         <ul className="space-y-2 text-xs text-muted-foreground">
-          {!cloudConnected ? (
-            <>
-              <li>· 本地功能可正常使用。</li>
-              <li>· 如需查看 Cookie，请先连接云端。</li>
-              <li>· Git 上传和项目启动不受影响。</li>
-            </>
-          ) : (
-            <li>· 云端已连接，Cookie 与远程状态可用。</li>
-          )}
+          <li>· 本地项目、Git、终端均可正常使用。</li>
+          <li>· Cookie 可在「Cookie」页从千帆中转机器人同步。</li>
           {(portAnalysis?.seriousCount ?? 0) > 0 && (
             <li>
               · 有端口需要处理
@@ -342,11 +334,9 @@ export function RightPanel() {
           {dupes.length > 0 && <li>· 重复项目：{dupes.length} 组</li>}
         </ul>
         <div className="flex flex-col gap-2">
-          {!cloudConnected && (
-            <Button size="sm" variant="secondary" onClick={() => setPage('settings')}>
-              去设置云端连接
-            </Button>
-          )}
+          <Button size="sm" variant="secondary" onClick={() => setPage('cookies')}>
+            Cookie 同步
+          </Button>
           <Button size="sm" variant="secondary" onClick={() => setPage('git')}>
             Git 上传
           </Button>
