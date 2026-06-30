@@ -327,6 +327,15 @@ const programCs = read(
 if (programCs.includes('MoveWindowNative') && programCs.includes('DllImport("user32.dll")')) {
   failures.push('native helper must not DllImport MoveWindowNative from user32.dll');
 }
+if (
+  !programCs.includes('EntryPoint = "MoveWindow"') &&
+  !/extern bool MoveWindow\(/.test(programCs)
+) {
+  failures.push('Program.cs must import user32 MoveWindow correctly');
+}
+if (!gitMgrFull.includes('finalizeGitCommitPaths')) {
+  failures.push('git-manager must re-filter paths in finalizeGitCommitPaths before git add');
+}
 
 const cloudClientSrc = read(path.join(ELECTRON, 'cloud-client.ts'));
 if (!cloudClientSrc.includes('clearSession')) {

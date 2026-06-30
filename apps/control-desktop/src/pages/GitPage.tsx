@@ -126,12 +126,16 @@ export function GitPage() {
         message: string;
         commitHash?: string;
         skipped?: { path: string; reason: string }[];
+        blocked?: { path: string; reason: string }[];
       };
       if (r.ok) {
         pushToast(
           'success',
           `已上传到 GitHub${r.commitHash ? `：commit ${r.commitHash.slice(0, 7)}` : ''}`,
         );
+        if (r.blocked?.length) {
+          pushToast('info', `主进程已拦截 ${r.blocked.length} 个运行数据/敏感文件`);
+        }
         if (r.skipped?.length) {
           pushToast('info', `已跳过 ${r.skipped.length} 个文件（不存在或路径异常）`);
         }
@@ -139,6 +143,9 @@ export function GitPage() {
         setCommitMsg(DEFAULT_COMMIT_MESSAGE);
         await refresh(false);
       } else {
+        if (r.blocked?.length) {
+          pushToast('info', `已拦截 ${r.blocked.length} 个文件，不会上传`);
+        }
         pushToast('error', r.message || '上传失败，请刷新 Git 状态后再试');
       }
     } catch (e) {

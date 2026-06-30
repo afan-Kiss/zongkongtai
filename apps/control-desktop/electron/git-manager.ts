@@ -408,6 +408,25 @@ export interface GitCommitPushResult {
   remote?: string;
   pushed?: boolean;
   skipped?: Array<{ path: string; reason: string }>;
+  blocked?: Array<{ path: string; reason: string }>;
+}
+
+/** 主进程最终安全过滤 — 不信任前端传入的 paths */
+function finalizeGitCommitPaths(
+  localPath: string,
+  rawPaths: string[],
+): {
+  safe: string[];
+  blocked: Array<{ path: string; reason: string }>;
+  riskLevel: string;
+} {
+  const manifest = readProjectManifest(localPath);
+  const riskLevel = resolveRiskLevel(
+    manifest?.code || path.basename(localPath),
+    manifest?.riskLevel,
+  );
+  const { safe, blocked } = filterGitPaths(rawPaths, { riskLevel });
+  return { safe, blocked, riskLevel };
 }
 
 export async function gitCommitAndPush(
@@ -437,6 +456,7 @@ export async function gitCommitAndPush(
   }
 
   let commitSkipped: Array<{ path: string; reason: string }> = [];
+  let commitBlocked: Array<{ path: string; reason: string }> = [];
 
   if (!opts.pushOnly) {
     const porcelain = await runGit(localPath, ['status', '--porcelain'], {
@@ -446,8 +466,17 @@ export async function gitCommitAndPush(
     const changes = parsePorcelain(porcelain);
     if (!changes.length) return { ok: false, message: '没有可提交改动' };
 
-    const paths = opts.paths?.length ? opts.paths : filterGitPaths(changes.map((c) => c.path)).safe;
-    const { valid, skipped } = validateGitAddPaths(localPath, paths);
+    const rawPaths = opts.paths?.length ? opts.paths : changes.map((c) => c.path);
+    const finalized = finalizeGitCommitPaths(localPath, rawPaths);
+    commitBlocked = finalized.blocked;
+    if (finalized.blocked.length) {
+      fileLog.app(
+        `[git-upload] main-process blocked ${finalized.blocked.length} paths (risk=${finalized.riskLevel})`,
+        'warn',
+      );
+    }
+
+    const { valid, skipped } = validateGitAddPaths(localPath, finalized.safe);
     commitSkipped = skipped;
     if (!valid.length) {
       const hint = skipped.length
@@ -460,6 +489,7 @@ export async function gitCommitAndPush(
         ok: false,
         message: hint ? `没有可安全提交的文件。${hint}` : '没有可安全提交的文件。',
         skipped: commitSkipped,
+        blocked: commitBlocked,
       };
     }
 
@@ -484,6 +514,7 @@ export async function gitCommitAndPush(
         ok: false,
         message: '没有可安全提交的文件。',
         skipped: commitSkipped,
+        blocked: commitBlocked,
       };
     }
 
@@ -535,6 +566,7 @@ export async function gitCommitAndPush(
     remote,
     pushed: true,
     skipped: commitSkipped.length ? commitSkipped : undefined,
+    blocked: commitBlocked.length ? commitBlocked : undefined,
   };
 }
 

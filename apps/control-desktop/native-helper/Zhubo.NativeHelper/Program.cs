@@ -142,7 +142,7 @@ internal static class Win32
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", SetLastError = true, EntryPoint = "MoveWindow")]
     private static extern bool MoveWindowWin32(IntPtr hWnd, int x, int y, int nWidth, int nHeight, bool bRepaint);
 
     [DllImport("user32.dll")]
