@@ -7,6 +7,7 @@ import pidusage from 'pidusage';
 import { sanitizeLogChunk } from './sanitize';
 import { isPortListening, resolveStartCommand } from './port-manager';
 import { fileLog } from './file-logger';
+import { assertRiskAllowed } from './ipc-security';
 
 export type ProcessStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
 
@@ -265,6 +266,7 @@ export class ProcessManager extends EventEmitter {
     id: string;
     name: string;
     code?: string;
+    riskLevel?: string;
     localPath: string;
     desktopStartCommand?: string | null;
     startCommand?: string | null;
@@ -272,6 +274,7 @@ export class ProcessManager extends EventEmitter {
     commands?: Array<{ type?: string; command?: string; cwd?: string | null; enabled?: boolean }>;
     ports?: any[];
   }): Promise<ManagedProcess> {
+    assertRiskAllowed(project, 'start');
     const check = await this.preflight(project);
     if (!check.ok) throw new Error(check.message);
 
@@ -342,7 +345,11 @@ export class ProcessManager extends EventEmitter {
     this.terminals.get(projectId)?.resize(cols, rows);
   }
 
-  async stop(projectId: string): Promise<void> {
+  async stop(
+    projectId: string,
+    project?: { code?: string; name?: string; riskLevel?: string },
+  ): Promise<void> {
+    if (project) assertRiskAllowed(project, 'stop');
     const managed = this.processes.get(projectId);
     const term = this.terminals.get(projectId);
     if (!term && !managed) return;
@@ -377,7 +384,8 @@ export class ProcessManager extends EventEmitter {
   }
 
   async restart(project: Parameters<ProcessManager['start']>[0]) {
-    await this.stop(project.id);
+    assertRiskAllowed(project, 'restart');
+    await this.stop(project.id, project);
     await new Promise((r) => setTimeout(r, 800));
     return this.start(project);
   }

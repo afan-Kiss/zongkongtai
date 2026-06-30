@@ -3,6 +3,13 @@ import path from 'path';
 import { loadConfig, getConfigDir } from './config';
 import { getLogDir } from './file-logger';
 import { processManager } from './process-manager';
+import { readProjectManifest } from './manifest-scanner';
+import {
+  normalizeRiskLevel,
+  DEFAULT_RISK_BY_CODE,
+  riskRequiresConfirm,
+  type RiskLevel,
+} from '../../../packages/control-shared/src/steward';
 
 const ALLOWED_EXTERNAL_PREFIXES = ['http://127.0.0.1', 'http://localhost', 'http://8.137.126.18'];
 
@@ -86,11 +93,21 @@ export function getWindowHwnd(win: BrowserWindow | null): string | undefined {
 }
 
 export function pickSafeProjectPayload(detail: Record<string, unknown>) {
+  const code = detail.code as string | undefined;
+  const localPath = detail.localPath as string | null | undefined;
+  let riskLevel = detail.riskLevel as string | undefined;
+  if (!riskLevel && code && localPath) {
+    const m = readProjectManifest(localPath);
+    riskLevel = m?.riskLevel;
+  }
+  const risk = normalizeRiskLevel(riskLevel || (code ? DEFAULT_RISK_BY_CODE[code] : undefined));
+
   return {
     id: String(detail.id || ''),
     name: String(detail.name || ''),
-    code: detail.code as string | undefined,
-    localPath: detail.localPath as string | null | undefined,
+    code,
+    riskLevel: risk,
+    localPath,
     desktopStartCommand: detail.desktopStartCommand as string | null | undefined,
     startCommand: detail.startCommand as string | null | undefined,
     devCommand: detail.devCommand as string | null | undefined,
@@ -99,4 +116,23 @@ export function pickSafeProjectPayload(detail: Record<string, unknown>) {
       | undefined,
     ports: detail.ports as Array<{ port: number; role?: string }> | undefined,
   };
+}
+
+const RISK_ACTION_MSG: Record<string, string> = {
+  start: '启动',
+  stop: '停止',
+  restart: '重启',
+};
+
+export function assertRiskAllowed(
+  project: { code?: string; name?: string; riskLevel?: RiskLevel | string },
+  action: 'start' | 'stop' | 'restart',
+): void {
+  const risk = normalizeRiskLevel(
+    project.riskLevel || (project.code ? DEFAULT_RISK_BY_CODE[project.code] : undefined),
+  );
+  const gate = riskRequiresConfirm(risk);
+  if (gate === 'blocked') {
+    throw new Error(`这个项目是 protected，不能从 EXE 自动${RISK_ACTION_MSG[action]}。`);
+  }
 }

@@ -22,6 +22,13 @@ import {
   riskRequiresConfirm,
 } from '@zhubo/control-shared';
 
+const RISK_LABEL: Record<string, string> = {
+  low: '低风险',
+  medium: '中风险',
+  high: '高风险',
+  protected: '受保护',
+};
+
 function statusLabel(status?: string) {
   switch (status) {
     case 'running':
@@ -70,10 +77,14 @@ export function ProjectCard({ project }: { project: Project }) {
   const start = async () => {
     try {
       if (riskGate === 'blocked') {
-        pushToast('error', '受保护项目，不允许 EXE 自动启停');
+        pushToast('error', '这个项目是 protected，不能从 EXE 自动启动。');
         return;
       }
-      if (riskGate === 'high' && !confirm(`高风险项目「${project.name}」，确定启动？`)) return;
+      if (
+        riskGate === 'high' &&
+        !confirm(`高风险项目「${project.name}」\n影响：可能影响线上服务或核心数据\n确定启动？`)
+      )
+        return;
       if (riskGate === 'medium' && !confirm(`中等风险项目「${project.name}」，确定启动？`)) return;
       if (!project.localPath) throw new Error('无本地路径');
       await window.zhuboDesktop.process.start(project);
@@ -91,15 +102,22 @@ export function ProjectCard({ project }: { project: Project }) {
 
   const stop = async () => {
     if (isProtected) {
-      pushToast('error', '受保护项目，不允许停止');
+      pushToast('error', '这个项目是 protected，不能从 EXE 自动停止。');
       return;
     }
-    if (riskGate === 'high' && !confirm(`高风险项目「${project.name}」，确定停止？`)) return;
-    await window.zhuboDesktop.process.stop(project.id);
+    if (riskGate === 'high' && !confirm(`高风险项目「${project.name}」\n确定停止？`)) return;
+    if (riskGate === 'medium' && !confirm(`中等风险项目「${project.name}」，确定停止？`)) return;
+    await window.zhuboDesktop.process.stop(project.id, project);
     pushToast('info', `${project.name} 已停止`);
   };
 
   const restart = async () => {
+    if (isProtected) {
+      pushToast('error', '这个项目是 protected，不能从 EXE 自动重启。');
+      return;
+    }
+    if (riskGate === 'high' && !confirm(`高风险项目「${project.name}」\n确定重启？`)) return;
+    if (riskGate === 'medium' && !confirm(`中等风险项目「${project.name}」，确定重启？`)) return;
     try {
       await window.zhuboDesktop.process.restart(project);
       pushToast('success', `${project.name} 正在重启`);
@@ -150,7 +168,7 @@ export function ProjectCard({ project }: { project: Project }) {
                     risk === 'low' ? 'success' : risk === 'protected' ? 'destructive' : 'warning'
                   }
                 >
-                  {risk}
+                  {RISK_LABEL[risk] || risk}
                 </Badge>
               </div>
             </div>
@@ -175,7 +193,7 @@ export function ProjectCard({ project }: { project: Project }) {
                 <Play className="h-3 w-3" /> 启动
               </Button>
             </Tooltip>
-            {!isProtected && (
+            {!isProtected && risk !== 'high' && (
               <>
                 <Tooltip content="停止由总控启动的进程">
                   <Button
@@ -188,6 +206,25 @@ export function ProjectCard({ project }: { project: Project }) {
                   </Button>
                 </Tooltip>
                 <Tooltip content="先停止再重新启动">
+                  <Button size="sm" variant="ghost" onClick={restart}>
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
+                </Tooltip>
+              </>
+            )}
+            {!isProtected && risk === 'high' && (
+              <>
+                <Tooltip content="高风险：停止需强确认">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={stop}
+                    disabled={status !== 'running'}
+                  >
+                    <Square className="h-3 w-3" /> 停止
+                  </Button>
+                </Tooltip>
+                <Tooltip content="高风险：重启需强确认">
                   <Button size="sm" variant="ghost" onClick={restart}>
                     <RotateCcw className="h-3 w-3" />
                   </Button>

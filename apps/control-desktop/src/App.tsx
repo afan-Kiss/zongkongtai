@@ -21,8 +21,9 @@ import { TasksPage } from '@/pages/TasksPage';
 import { AboutPage } from '@/pages/AboutPage';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { CloudOfflineBanner } from '@/components/CloudOfflineBanner';
+import type { NavPage } from '@/types/desktop';
 
-const PAGES = {
+const PAGES: Record<NavPage, React.ComponentType> = {
   overview: OverviewPage,
   workspace: WorkspacePage,
   projects: ProjectsPage,
@@ -40,12 +41,21 @@ const PAGES = {
   about: AboutPage,
 };
 
+function resolvePage(page: NavPage): React.ComponentType {
+  const Page = PAGES[page];
+  if (!Page) {
+    console.warn('[App] 未注册页面，回退到 overview:', page);
+    return OverviewPage;
+  }
+  return Page;
+}
+
 export default function App() {
   const page = useAppStore((s) => s.page);
   const terminalFullscreen = useAppStore((s) => s.terminalFullscreen);
   useCloudBootstrap();
 
-  const Page = PAGES[page];
+  const Page = resolvePage(page);
 
   if (terminalFullscreen) {
     return (
