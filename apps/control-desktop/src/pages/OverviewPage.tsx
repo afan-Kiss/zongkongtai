@@ -16,7 +16,8 @@ export function OverviewPage() {
   const projects = useAppStore((s) => s.projects);
   const cloudConnected = useAppStore((s) => s.cloudConnected);
   const agentStatus = useAppStore((s) => s.agentStatus);
-  const conflictCount = useAppStore((s) => s.conflictCount);
+  const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
+  const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
   const pushToast = useAppStore((s) => s.pushToast);
   const setPage = useAppStore((s) => s.setPage);
@@ -105,13 +106,28 @@ export function OverviewPage() {
             <div className="text-sm">{qianfanCookieMessage(qianfanCookieUpdatedAt)}</div>
           </CardHeader>
         </Card>
-        <Card>
+        <Card
+          className={
+            portAnalysis?.topBarClickable
+              ? 'cursor-pointer transition-colors hover:bg-accent/20'
+              : ''
+          }
+          onClick={() => portAnalysis?.topBarClickable && setPortConflictOpen(true)}
+        >
           <CardHeader>
-            <div className="text-sm text-muted-foreground">端口冲突</div>
+            <div className="text-sm text-muted-foreground">
+              {portAnalysis?.topBarLabel || '端口'}
+            </div>
             <div
-              className={`text-lg font-medium ${conflictCount ? 'text-amber-400' : 'text-green-400'}`}
+              className={`text-lg font-medium ${
+                portAnalysis?.seriousCount
+                  ? 'text-amber-400'
+                  : portAnalysis?.duplicateCount
+                    ? 'text-muted-foreground'
+                    : 'text-green-400'
+              }`}
             >
-              {conflictCount} 个
+              {portAnalysis?.topBarText || '正常'}
             </div>
           </CardHeader>
         </Card>

@@ -83,6 +83,16 @@ export function formatPortList(ports: Project['ports'], max = 3): string {
   return unique.join(', ');
 }
 
+export function hasDuplicatePortRegistration(ports: Project['ports']): boolean {
+  if (!ports?.length) return false;
+  const seen = new Set<number>();
+  for (const p of ports) {
+    if (seen.has(p.port)) return true;
+    seen.add(p.port);
+  }
+  return false;
+}
+
 export function findDuplicateGroups(projects: Project[]): string[] {
   const byName = new Map<string, number>();
   for (const p of projects) {

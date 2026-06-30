@@ -21,6 +21,7 @@ import { DeployPage } from '@/pages/DeployPage';
 import { TasksPage } from '@/pages/TasksPage';
 import { AboutPage } from '@/pages/AboutPage';
 import { GlobalTaskBar } from '@/components/GlobalTaskBar';
+import { PortConflictDialog } from '@/components/PortConflictDialog';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { CloudOfflineBanner } from '@/components/CloudOfflineBanner';
 import type { NavPage } from '@/types/desktop';
@@ -129,6 +130,7 @@ export default function App() {
             </div>
           </div>
           <ToastStack />
+          <PortConflictDialog />
         </div>
       </ErrorBoundary>
     </TooltipProvider>

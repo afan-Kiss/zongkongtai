@@ -16,6 +16,7 @@ export {
 export { asArray, normalizeScanPayload, normalizeScanProject, normalizeScanFields } from './arrays';
 export * from './steward';
 export * from './gitSecurity';
+export * from './portConflict';
 export type {
   ZhuboControlManifest,
   ManifestServiceEntry,

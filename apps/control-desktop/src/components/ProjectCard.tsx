@@ -21,7 +21,12 @@ import {
   normalizeRiskLevel,
   riskRequiresConfirm,
 } from '@zhubo/control-shared';
-import { formatPortList, findDuplicateGroups, GIT_UNPUSHED_CACHE_KEY } from '@/lib/projectDedup';
+import {
+  formatPortList,
+  findDuplicateGroups,
+  GIT_UNPUSHED_CACHE_KEY,
+  hasDuplicatePortRegistration,
+} from '@/lib/projectDedup';
 
 const RISK_LABEL: Record<string, string> = {
   low: '低风险',
@@ -68,6 +73,7 @@ export function ProjectCard({ project }: { project: Project }) {
   const riskGate = riskRequiresConfirm(risk);
   const isProtected = risk === 'protected';
   const ports = formatPortList(project.ports, 4);
+  const portsDeduped = hasDuplicatePortRegistration(project.ports);
   const isRunning = status === 'running';
   const isError = status === 'error';
 
@@ -177,7 +183,11 @@ export function ProjectCard({ project }: { project: Project }) {
             {project.localPath || '无本地路径'}
           </div>
           <div className="flex flex-wrap gap-1">
-            <Badge variant="muted">端口 {ports}</Badge>
+            <Tooltip
+              content={portsDeduped ? '原始配置里有重复端口，已去重显示。' : `端口：${ports}`}
+            >
+              <Badge variant="muted">端口 {ports}</Badge>
+            </Tooltip>
             {proc?.pid && <Badge variant="muted">PID {proc.pid}</Badge>}
           </div>
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
@@ -258,7 +268,8 @@ export function RightPanel() {
   const selectedId = useAppStore((s) => s.selectedProjectId);
   const projects = useAppStore((s) => s.projects);
   const cloudConnected = useAppStore((s) => s.cloudConnected);
-  const conflictCount = useAppStore((s) => s.conflictCount);
+  const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
+  const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
   const setPage = useAppStore((s) => s.setPage);
   const proc = useAppStore((s) =>
@@ -297,7 +308,21 @@ export function RightPanel() {
         <h3 className="font-medium text-foreground">今日建议</h3>
         <ul className="space-y-2 text-xs text-muted-foreground">
           <li>
-            · 端口冲突：{conflictCount} 个{conflictCount > 0 ? '，建议到「端口」处理' : ''}
+            · 端口：
+            {portAnalysis?.seriousCount
+              ? `${portAnalysis.seriousCount} 个需处理`
+              : portAnalysis?.duplicateCount
+                ? '有重复登记，不影响使用'
+                : '正常'}
+            {portAnalysis?.seriousCount || portAnalysis?.duplicateCount ? (
+              <button
+                type="button"
+                className="ml-1 text-primary underline"
+                onClick={() => setPortConflictOpen(true)}
+              >
+                查看
+              </button>
+            ) : null}
           </li>
           <li>· 云端：{cloudConnected ? '已连接' : '未连接'}</li>
           <li>

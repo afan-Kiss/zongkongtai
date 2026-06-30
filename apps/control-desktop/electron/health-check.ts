@@ -11,7 +11,7 @@ import { getScanRoot, scanManifestsLocal, readProjectManifest } from './manifest
 import { loadConfig } from './config';
 import { listGitStatusesAsync, collectGitProjects } from './git-manager';
 import { scanManifestFileForbidden } from './forbidden-url';
-import { scanLocalPortsAsync } from './port-manager';
+import { analyzePortConflictsAsync } from './port-conflict-analyzer';
 
 export type HealthProgress = (step: string, progress: number, message?: string) => void;
 
@@ -106,21 +106,23 @@ export function checkManifests(): HealthCheckItem {
 
 export async function checkPorts(signal?: AbortSignal): Promise<HealthCheckItem> {
   try {
-    await scanLocalPortsAsync(signal);
-    const ports = await cloudClient.ports().catch(() => []);
-    const conflicts = ports.filter(
-      (p: { conflictLevel?: string }) => p.conflictLevel === 'conflict',
-    );
+    const analysis = await analyzePortConflictsAsync([], signal);
+    const status = analysis.seriousCount > 0 ? 'warn' : analysis.duplicateCount > 0 ? 'ok' : 'ok';
     return item({
-      id: 'port_conflicts',
+      id: 'ports',
       title: '端口冲突',
-      status: conflicts.length === 0 ? 'ok' : 'warn',
-      message: conflicts.length ? `${conflicts.length} 个端口冲突` : '无严重冲突',
+      status,
+      message: analysis.healthMessage,
+      repairAction:
+        analysis.seriousCount > 0 || analysis.duplicateCount > 0
+          ? 'dialog:portConflicts'
+          : undefined,
+      repairable: analysis.seriousCount > 0 || analysis.duplicateCount > 0,
       category: 'project',
     });
   } catch {
     return item({
-      id: 'port_conflicts',
+      id: 'ports',
       title: '端口冲突',
       status: 'skipped',
       message: '端口扫描超时或云端未连接，已跳过',

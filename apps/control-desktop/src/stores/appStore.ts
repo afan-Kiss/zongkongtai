@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { deduplicateProjects } from '@/lib/projectDedup';
+import type { PortConflictAnalysis } from '@zhubo/control-shared';
 import type { AgentStatus, NavPage, ProcessInfo, Project, ToastItem } from '@/types/desktop';
 
 interface AppState {
@@ -10,6 +11,9 @@ interface AppState {
   agentsOnline: number;
   agentStatus: AgentStatus | null;
   conflictCount: number;
+  portConflictAnalysis: PortConflictAnalysis | null;
+  portConflictOpen: boolean;
+  portConflictIgnoredIds: string[];
   warningCount: number;
   runningCount: number;
   projects: Project[];
@@ -35,6 +39,9 @@ interface AppState {
   removeToast: (id: string) => void;
   setQianfanCookie: (updatedAt: string | null, hash: string | null) => void;
   setShowDuplicateProjects: (v: boolean) => void;
+  setPortConflictAnalysis: (a: PortConflictAnalysis | null) => void;
+  setPortConflictOpen: (v: boolean) => void;
+  ignorePortConflict: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -45,6 +52,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   agentsOnline: 0,
   agentStatus: null,
   conflictCount: 0,
+  portConflictAnalysis: null,
+  portConflictOpen: false,
+  portConflictIgnoredIds: [],
   warningCount: 0,
   runningCount: 0,
   projects: [],
@@ -87,4 +97,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   setQianfanCookie: (updatedAt, hash) =>
     set({ qianfanCookieUpdatedAt: updatedAt, qianfanCookieHash: hash }),
   setShowDuplicateProjects: (showDuplicateProjects) => set({ showDuplicateProjects }),
+  setPortConflictAnalysis: (portConflictAnalysis) =>
+    set({
+      portConflictAnalysis,
+      conflictCount: portConflictAnalysis?.seriousCount ?? 0,
+    }),
+  setPortConflictOpen: (portConflictOpen) => set({ portConflictOpen }),
+  ignorePortConflict: (id) =>
+    set((s) => ({
+      portConflictIgnoredIds: s.portConflictIgnoredIds.includes(id)
+        ? s.portConflictIgnoredIds
+        : [...s.portConflictIgnoredIds, id],
+    })),
 }));

@@ -73,9 +73,16 @@ export function TopBar() {
   const cloudConnected = useAppStore((s) => s.cloudConnected);
   const cloudMessage = useAppStore((s) => s.cloudMessage);
   const agentStatus = useAppStore((s) => s.agentStatus);
-  const conflictCount = useAppStore((s) => s.conflictCount);
+  const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
+  const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const runningCount = useAppStore((s) => s.runningCount);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
+
+  const portLabel = portAnalysis?.topBarLabel || '端口';
+  const portText = portAnalysis?.topBarText || '正常';
+  const portOk = portAnalysis?.topBarOk ?? true;
+  const portClickable = portAnalysis?.topBarClickable ?? false;
+  const portWarn = !portOk || (portAnalysis?.duplicateCount ?? 0) > 0;
 
   const agentLabel = (() => {
     if (!agentStatus) return { ok: false, text: '检查中…', warn: false };
@@ -107,31 +114,52 @@ export function TopBar() {
         : '无',
     },
     {
-      label: '端口冲突',
-      ok: conflictCount === 0,
-      text: `${conflictCount}个`,
-      warn: conflictCount > 0,
+      label: portLabel,
+      ok: portOk,
+      text: portText,
+      warn: portWarn,
+      clickable: portClickable,
+      onClick: portClickable ? () => setPortConflictOpen(true) : undefined,
     },
     { label: '运行', ok: true, text: `${runningCount}个` },
   ];
 
   return (
     <header className="flex h-11 flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 text-xs">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className={cn('flex items-center gap-1.5', item.warn && !item.ok && 'text-amber-400')}
-        >
-          <span
+      {items.map((item) => {
+        const inner = (
+          <>
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                item.ok ? 'bg-green-400' : item.warn ? 'bg-amber-400' : 'bg-red-400',
+              )}
+            />
+            <span className="text-muted-foreground">{item.label}</span>
+            <span className="max-w-[180px] truncate font-medium">{item.text}</span>
+          </>
+        );
+        return item.clickable ? (
+          <button
+            key={item.label}
+            type="button"
+            onClick={item.onClick}
             className={cn(
-              'h-1.5 w-1.5 rounded-full',
-              item.ok ? 'bg-green-400' : item.warn ? 'bg-amber-400' : 'bg-red-400',
+              'flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-accent/60',
+              item.warn && !item.ok && 'text-amber-400',
             )}
-          />
-          <span className="text-muted-foreground">{item.label}</span>
-          <span className="max-w-[140px] truncate font-medium">{item.text}</span>
-        </div>
-      ))}
+          >
+            {inner}
+          </button>
+        ) : (
+          <div
+            key={item.label}
+            className={cn('flex items-center gap-1.5', item.warn && !item.ok && 'text-amber-400')}
+          >
+            {inner}
+          </div>
+        );
+      })}
     </header>
   );
 }

@@ -175,6 +175,7 @@ const keyIpc = [
   'steward:workdayEnd',
   'ports:local',
   'cloud:ports',
+  'ports:analyze',
   'manifest:scanLocal',
   'manifest:import',
   'projects:rescanDisk',

@@ -6,6 +6,8 @@ import { formatRelativeTime, hashPrefix } from '@/lib/utils';
 export function useCloudBootstrap() {
   const setCloud = useAppStore((s) => s.setCloud);
   const setProjects = useAppStore((s) => s.setProjects);
+  const setPortConflictAnalysis = useAppStore((s) => s.setPortConflictAnalysis);
+  const portConflictIgnoredIds = useAppStore((s) => s.portConflictIgnoredIds);
   const setQianfanCookie = useAppStore((s) => s.setQianfanCookie);
   const setAgentStatus = useAppStore((s) => s.setAgentStatus);
   const pushToast = useAppStore((s) => s.pushToast);
@@ -33,9 +35,13 @@ export function useCloudBootstrap() {
         ]);
         setProjects(deduplicateProjects(projects as import('@/types/desktop').Project[]));
         if (agentSnap) setAgentStatus(agentSnap as any);
+        const portAnalysis = await window.zhuboDesktop.ports
+          .analyze(portConflictIgnoredIds)
+          .catch(() => null);
+        if (portAnalysis) setPortConflictAnalysis(portAnalysis);
         setCloud(true, '已连接', {
           agentsOnline: (agentSnap as any)?.cloudOnline ? 1 : (conn.agentsOnline ?? 0),
-          conflictCount: dash.conflictCount ?? 0,
+          conflictCount: portAnalysis?.seriousCount ?? dash.conflictCount ?? 0,
           warningCount: dash.warningCount ?? 0,
         });
         const qf = (secrets as any[]).find(
@@ -63,7 +69,15 @@ export function useCloudBootstrap() {
       offProc();
       offAgent();
     };
-  }, [setCloud, setProjects, setQianfanCookie, setAgentStatus, pushToast]);
+  }, [
+    setCloud,
+    setProjects,
+    setQianfanCookie,
+    setAgentStatus,
+    pushToast,
+    setPortConflictAnalysis,
+    portConflictIgnoredIds,
+  ]);
 }
 
 export function qianfanStaleMessage(updatedAt: string | null) {

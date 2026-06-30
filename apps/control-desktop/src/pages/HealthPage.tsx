@@ -56,6 +56,7 @@ function loadCachedReport(): HealthCheckReport | null {
 export function HealthPage() {
   const pushToast = useAppStore((s) => s.pushToast);
   const setPage = useAppStore((s) => s.setPage);
+  const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const [report, setReport] = useState<HealthCheckReport | null>(() => loadCachedReport());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -86,9 +87,10 @@ export function HealthPage() {
   };
 
   const goFix = (item: HealthCheckItem) => {
-    if (item.repairAction === 'nav:cookies') setPage('cookies');
+    if (item.repairAction === 'dialog:portConflicts') setPortConflictOpen(true);
+    else if (item.repairAction === 'nav:cookies') setPage('cookies');
     else if (item.repairAction === 'nav:git') setPage('git');
-    else if (item.repairAction === 'nav:ports') setPage('ports');
+    else if (item.repairAction === 'nav:ports') setPortConflictOpen(true);
     else if (item.repairAction === 'nav:projects') setPage('projects');
   };
 
@@ -188,7 +190,9 @@ export function HealthPage() {
                     <div className="font-medium">{item.title}</div>
                     <div className="text-xs text-muted-foreground">{item.message}</div>
                   </div>
-                  {(item.repairAction?.startsWith('nav:') || item.status !== 'ok') && (
+                  {(item.repairAction?.startsWith('nav:') ||
+                    item.repairAction === 'dialog:portConflicts' ||
+                    item.status !== 'ok') && (
                     <Button size="sm" variant="secondary" onClick={() => goFix(item)}>
                       去处理 <ChevronRight className="h-3 w-3" />
                     </Button>

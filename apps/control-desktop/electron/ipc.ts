@@ -24,6 +24,12 @@ import {
   scanLocalPortsAsync,
 } from './port-manager';
 import { inspectLegacy4791Async, closeLegacy4791 } from './port-4791';
+import {
+  analyzePortConflictsAsync,
+  safeKillPortProcess,
+  previewManifestPortDedupe,
+  applyManifestPortDedupe,
+} from './port-conflict-analyzer';
 import { buildQianfanShopCards } from './qianfan-shops';
 
 import {
@@ -558,6 +564,24 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('ports:inspect4791', () => inspectLegacy4791Async());
 
   ipcMain.handle('ports:close4791', async () => closeLegacy4791());
+
+  ipcPerf('ports:analyze', async (_e, ignoredIds: string[] = []) =>
+    analyzePortConflictsAsync(ignoredIds),
+  );
+
+  ipcMain.handle(
+    'ports:safeKill',
+    async (_e, opts: { pid: number; projectId: string; port: number; ignoredIds?: string[] }) =>
+      safeKillPortProcess(opts.pid, opts.projectId, opts.port, opts.ignoredIds || []),
+  );
+
+  ipcMain.handle('manifest:dedupePortsPreview', (_e, localPath: string) =>
+    previewManifestPortDedupe(localPath),
+  );
+
+  ipcMain.handle('manifest:dedupePortsApply', (_e, localPath: string) =>
+    applyManifestPortDedupe(localPath),
+  );
 
   ipcMain.handle('project:webUrl', (_e, project: any) => inferWebUrl(project));
 

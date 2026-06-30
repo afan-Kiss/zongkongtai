@@ -65,6 +65,9 @@ const api = {
     check: (port: number) => ipcRenderer.invoke('ports:check', port),
     inspect4791: () => ipcRenderer.invoke('ports:inspect4791'),
     close4791: () => ipcRenderer.invoke('ports:close4791'),
+    analyze: (ignoredIds?: string[]) => ipcRenderer.invoke('ports:analyze', ignoredIds || []),
+    safeKill: (opts: { pid: number; projectId: string; port: number; ignoredIds?: string[] }) =>
+      ipcRenderer.invoke('ports:safeKill', opts),
   },
 
   project: {
@@ -118,6 +121,10 @@ const api = {
   manifest: {
     scanLocal: () => ipcRenderer.invoke('manifest:scanLocal'),
     import: () => ipcRenderer.invoke('manifest:import'),
+    dedupePortsPreview: (localPath: string) =>
+      ipcRenderer.invoke('manifest:dedupePortsPreview', localPath),
+    dedupePortsApply: (localPath: string) =>
+      ipcRenderer.invoke('manifest:dedupePortsApply', localPath),
   },
 
   projects: {
