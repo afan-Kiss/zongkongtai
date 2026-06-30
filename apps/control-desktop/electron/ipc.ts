@@ -1,3 +1,4 @@
+/** 本地总控 IPC — 仅本地项目 / Git / 端口 / 进程，无 cloud / agent / workspace */
 import { ipcMain, BrowserWindow, shell, app } from 'electron';
 import path from 'path';
 import {
@@ -36,11 +37,11 @@ import {
 import { loadLocalProjectsFromManifests, findLocalProjectById } from './local-projects';
 import {
   detectAllExternalRunning,
+  detectExternalProjectStatus,
   isQianfanRelayProject,
   type DetectableProject,
 } from './external-project-status';
 import { canStopExternalProcess, stopExternalProcess } from './external-process-stop';
-import { detectExternalProjectStatus } from './external-project-status';
 
 import { getLogDir } from './file-logger';
 

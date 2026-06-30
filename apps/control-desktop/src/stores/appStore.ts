@@ -1,3 +1,4 @@
+/** 本地总控前端状态 — 无 cloud / agent / Cookie 字段 */
 import { create } from 'zustand';
 import { deduplicateProjects } from '@/lib/projectDedup';
 import type { PortConflictAnalysis } from '@zhubo/control-shared';

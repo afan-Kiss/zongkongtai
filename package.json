@@ -27,7 +27,8 @@
     "control:acceptance-minimal-local": "node scripts/acceptance-minimal-local.mjs",
     "control:acceptance-local-only": "node scripts/acceptance-local-only.mjs",
     "control:acceptance-source-format": "node scripts/acceptance-source-format.mjs",
-    "control:acceptance-full-local-walkthrough": "node scripts/acceptance-full-local-walkthrough.mjs"
+    "control:acceptance-full-local-walkthrough": "node scripts/acceptance-full-local-walkthrough.mjs",
+    "control:verify-github-raw-main": "node scripts/verify-github-raw-main.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

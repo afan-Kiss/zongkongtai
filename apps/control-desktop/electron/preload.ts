@@ -1,3 +1,4 @@
+/** 本地总控 preload — 仅暴露本地 API */
 import { contextBridge, ipcRenderer } from 'electron';
 
 function taskEvents(channel: string, cb: (task: unknown) => void) {
