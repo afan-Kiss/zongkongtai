@@ -73,6 +73,9 @@ export interface ProcessInfo {
   startedAt?: string;
   error?: string;
   externalSource?: string;
+  canStopExternal?: boolean;
+  externalStopHint?: string;
+  startupWarning?: string;
   sessions?: ProcessSession[];
 }
 

@@ -11,6 +11,7 @@ export interface ExternalDetectResult {
   source?: string;
   pid?: number;
   message?: string;
+  canStopExternal?: boolean;
 }
 
 export interface DetectableProject {
@@ -107,7 +108,10 @@ function commandLineMatchesProject(cmd: string, project: DetectableProject): boo
   return false;
 }
 
-async function checkHealthUrls(project: DetectableProject): Promise<ExternalDetectResult | null> {
+async function checkHealthUrls(
+  project: DetectableProject,
+  localPorts?: LocalPortInfo[],
+): Promise<ExternalDetectResult | null> {
   const urls = [
     project.localHealthUrl,
     project.healthUrl,
@@ -116,10 +120,16 @@ async function checkHealthUrls(project: DetectableProject): Promise<ExternalDete
   for (const url of [...new Set(urls)]) {
     const res = await checkHealthUrl(url, DETECT_TIMEOUT_MS);
     if (res.ok) {
+      let pid: number | undefined;
+      if (localPorts && isQianfanRelayProject(project)) {
+        const port = url.includes('9323') ? 9323 : url.includes('8787') ? 8787 : undefined;
+        if (port) pid = localPorts.find((p) => p.port === port)?.pid;
+      }
       return {
         status: 'external-running',
         source: url.includes('9323') ? 'qianfan-health' : 'health',
         message: url,
+        pid,
       };
     }
   }
@@ -190,11 +200,12 @@ export async function detectExternalProjectStatus(
     return { status: 'running', source: 'managed', pid: managed.pid };
   }
 
-  const health = await checkHealthUrls(p);
-  if (health) return health;
-
   const localPorts = opts?.localPorts ?? (await scanLocalPortsAsync(undefined, true));
   const cmdCache = opts?.cmdCache ?? new Map<number, string>();
+
+  const health = await checkHealthUrls(p, localPorts);
+  if (health) return health;
+
   const portHit = await checkPortsWithCmd(p, localPorts, cmdCache);
   if (portHit) return portHit;
 

@@ -15,12 +15,12 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, Badge, StatusDot } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAppStore } from '@/stores/appStore';
+import { refreshExternalRunning } from '@/hooks/useLocalBootstrap';
 import type { Project } from '@/types/desktop';
 import { DEFAULT_RISK_BY_CODE, normalizeRiskLevel } from '@zhubo/control-shared';
 import {
   formatPortList,
   findDuplicateGroups,
-  GIT_UNPUSHED_CACHE_KEY,
   hasDuplicatePortRegistration,
 } from '@/lib/projectDedup';
 
@@ -73,6 +73,15 @@ export function ProjectCard({ project }: { project: Project }) {
   const isManagedRunning = status === 'running';
   const isRunning = isManagedRunning || isExternal;
   const isError = status === 'error';
+  const canStopExternal = isExternal && !!proc?.canStopExternal && !!proc?.pid;
+  const externalStopHint =
+    proc?.externalStopHint ||
+    (isExternal && !proc?.pid
+      ? '已检测到外部运行，但暂时拿不到进程号，请在原窗口关闭。'
+      : undefined);
+  const localPathMissing = !project.localPath;
+  const startDisabled =
+    isExternal || status === 'running' || status === 'starting' || localPathMissing;
 
   const start = async () => {
     try {
@@ -80,15 +89,46 @@ export function ProjectCard({ project }: { project: Project }) {
         pushToast('info', '总控工作台请直接关闭窗口，不要在此卡片启停。');
         return;
       }
-      if (!project.localPath) throw new Error('无本地路径');
-      await window.zhuboDesktop.process.start(project);
+      if (!project.localPath) {
+        pushToast('error', '本地目录不存在');
+        return;
+      }
+      const managed = (await window.zhuboDesktop.process.start(project)) as {
+        startupWarning?: string;
+      };
       setActiveTerminal(project.id);
       const url = await window.zhuboDesktop.project.webUrl(project).catch(() => null);
       const target = url || project.localWebUrl;
-      pushToast(
-        'success',
-        target ? `项目已启动，可访问地址：${target}` : `${project.name} 已开始启动`,
-      );
+      if (managed?.startupWarning) {
+        pushToast('info', managed.startupWarning);
+      } else {
+        pushToast(
+          'success',
+          target ? `项目已启动，可访问地址：${target}` : `${project.name} 已开始启动`,
+        );
+      }
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const stopExternal = async () => {
+    if (
+      !confirm(
+        `这是外部启动的进程，结束前请确认不是其他重要软件。\n\n确定结束「${project.name}」的外部进程？`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await window.zhuboDesktop.process.stopExternal({
+        projectId: project.id,
+        project,
+        pid: proc?.pid,
+        source: proc?.externalSource,
+      });
+      await refreshExternalRunning();
+      pushToast('success', '已结束外部进程');
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
     }
@@ -183,29 +223,48 @@ export function ProjectCard({ project }: { project: Project }) {
             {!selfControl && (
               <>
                 <Tooltip
-                  content={isExternal ? '该项目已在外部启动' : '启动这个项目，并在下方显示终端日志'}
+                  content={
+                    localPathMissing
+                      ? '本地目录不存在'
+                      : isExternal
+                        ? '该项目已在外部启动'
+                        : '启动这个项目，并在下方显示终端日志'
+                  }
                 >
-                  <Button
-                    size="sm"
-                    onClick={start}
-                    disabled={isExternal || status === 'running' || status === 'starting'}
-                  >
+                  <Button size="sm" onClick={start} disabled={startDisabled}>
                     <Play className="h-3 w-3" /> {isExternal ? '已在外部运行' : '启动'}
                   </Button>
                 </Tooltip>
-                <Tooltip
-                  content={isExternal ? '不是总控启动的，请在原窗口关闭' : '停止由总控启动的进程'}
-                >
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={stop}
-                    disabled={status !== 'running'}
+                {isExternal ? (
+                  <Tooltip
+                    content={
+                      canStopExternal
+                        ? '这是外部启动的进程，结束前请确认不是其他重要软件。'
+                        : externalStopHint || '无法确认进程归属'
+                    }
                   >
-                    <Square className="h-3 w-3" /> 停止
-                  </Button>
-                </Tooltip>
-                <Tooltip content={isExternal ? '外部运行项目不能由总控重启' : '先停止再重新启动'}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={stopExternal}
+                      disabled={!canStopExternal}
+                    >
+                      <Square className="h-3 w-3" /> 结束外部进程
+                    </Button>
+                  </Tooltip>
+                ) : (
+                  <Tooltip content="停止由总控启动的进程">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={stop}
+                      disabled={status !== 'running'}
+                    >
+                      <Square className="h-3 w-3" /> 停止
+                    </Button>
+                  </Tooltip>
+                )}
+                <Tooltip content={isExternal ? '外部运行项目请先结束后再启动' : '先停止再重新启动'}>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -243,6 +302,7 @@ export function RightPanel() {
   const selectedId = useAppStore((s) => s.selectedProjectId);
   const projects = useAppStore((s) => s.projects);
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
+  const gitSummary = useAppStore((s) => s.gitSummary);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const setPage = useAppStore((s) => s.setPage);
   const proc = useAppStore((s) =>
@@ -255,12 +315,9 @@ export function RightPanel() {
   );
   const [checking, setChecking] = useState(false);
   const [webUrl, setWebUrl] = useState<string | null>(null);
-  const [gitUnpushed, setGitUnpushed] = useState(0);
 
-  useEffect(() => {
-    const n = sessionStorage.getItem(GIT_UNPUSHED_CACHE_KEY);
-    setGitUnpushed(n ? parseInt(n, 10) || 0 : 0);
-  }, [selectedId, projects.length]);
+  const gitUnpushed = gitSummary.unpushedCount ?? 0;
+  const gitChecked = gitSummary.checkedAt != null;
 
   useEffect(() => {
     setHealth(null);
@@ -294,7 +351,7 @@ export function RightPanel() {
               </button>
             </li>
           )}
-          {gitUnpushed > 0 && (
+          {gitChecked && gitUnpushed > 0 && (
             <li>
               · 有项目未上传 Git
               <button

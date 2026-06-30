@@ -38,6 +38,7 @@ const api = {
     preflight: (p: unknown) => ipcRenderer.invoke('process:preflight', p),
     start: (p: unknown) => ipcRenderer.invoke('process:start', p),
     stop: (id: string, meta?: unknown) => ipcRenderer.invoke('process:stop', id, meta),
+    stopExternal: (payload: unknown) => ipcRenderer.invoke('process:stopExternal', payload),
     restart: (p: unknown) => ipcRenderer.invoke('process:restart', p),
     usage: (id: string) => ipcRenderer.invoke('process:usage', id),
   },

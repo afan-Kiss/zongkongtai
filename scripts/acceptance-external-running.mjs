@@ -19,9 +19,6 @@ const card = read(path.join(SRC, 'components/ProjectCard.tsx'));
 if (!card.includes('外部运行中')) {
   failures.push('ProjectCard must show 外部运行中 label');
 }
-if (!card.includes('不是总控启动的，请在原窗口关闭')) {
-  failures.push('ProjectCard must disable stop for external-running');
-}
 if (!card.includes('已在外部运行')) {
   failures.push('ProjectCard must disable start for external-running');
 }

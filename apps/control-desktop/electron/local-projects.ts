@@ -1,11 +1,13 @@
 import path from 'path';
 import { manifestToScanFields } from '../../../packages/control-shared/src/manifest';
 import { enrichProjectForDetection, isQianfanRelayProject } from './external-project-status';
+import { enrichQianfanStartCommand } from './start-command';
 import { getScanRoot, scanManifestsLocal } from './manifest-scanner';
 
 function enrichQianfanRelayFields<T extends Record<string, unknown>>(project: T): T {
   if (!isQianfanRelayProject(project as { code?: string; name?: string })) return project;
-  return enrichProjectForDetection(project as any) as T;
+  const withStart = enrichQianfanStartCommand(project);
+  return enrichProjectForDetection(withStart as any) as T;
 }
 
 /** 从本地 manifest 扫描构建项目列表，不依赖云端登录 */

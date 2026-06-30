@@ -9,10 +9,13 @@ import {
   invalidatePortCache,
   resolveStartCommand,
   scanLocalPortsAsync,
+  checkHealthUrl,
   type LocalPortInfo,
 } from './port-manager';
 import { fileLog } from './file-logger';
 import { assertRiskAllowed } from './ipc-security';
+import { validateProjectStartCommand } from './start-command';
+import { isQianfanRelayProject } from './external-project-status';
 import {
   normalizeRiskLevel,
   DEFAULT_RISK_BY_CODE,
@@ -30,6 +33,7 @@ export interface ManagedProcess {
   startedAt?: string;
   exitCode?: number | null;
   error?: string;
+  startupWarning?: string;
   sessions: ProcessSession[];
 }
 
@@ -222,12 +226,10 @@ export class ProcessManager extends EventEmitter {
   }): Promise<StartCheckResult> {
     const warnings: string[] = [];
     if (!project.localPath) return { ok: false, message: '该项目没有本地路径，无法启动' };
-    if (!fs.existsSync(project.localPath))
-      return { ok: false, message: `本地路径不存在：${project.localPath}` };
+    const validation = validateProjectStartCommand(project);
+    if (!validation.ok) return { ok: false, message: validation.message };
 
-    const start = resolveStartCommand(project);
-    if (!start)
-      return { ok: false, message: '没有登记启动命令，请在设置或云端配置 desktop/dev/start 命令' };
+    const start = validation.resolved!;
 
     const pkg = path.join(project.localPath, 'package.json');
     if (
@@ -357,7 +359,26 @@ export class ProcessManager extends EventEmitter {
       fileLog.process(`${project.name} 退出 code=${exitCode}`);
     });
 
+    if (isQianfanRelayProject(project)) {
+      void this.verifyQianfanStartupHealth(project.id, project.name);
+    }
+
     return managed;
+  }
+
+  private async verifyQianfanStartupHealth(projectId: string, projectName: string) {
+    await new Promise((r) => setTimeout(r, 4000));
+    const managed = this.processes.get(projectId);
+    if (!managed || managed.status !== 'running') return;
+    const health = await checkHealthUrl('http://127.0.0.1:9323/api/health', 5000);
+    if (!health.ok) {
+      managed.startupWarning = '已执行启动命令，但未检测到本地健康接口，请查看终端。';
+      this.emit('status', managed);
+      this.appendLog(
+        projectId,
+        `\r\n[警告] ${projectName}：9323 /api/health 未响应，请查看终端日志。\r\n`,
+      );
+    }
   }
 
   write(projectId: string, data: string) {

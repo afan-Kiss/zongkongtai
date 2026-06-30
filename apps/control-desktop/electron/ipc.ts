@@ -40,7 +40,12 @@ import {
 } from './native-helper-client';
 
 import { loadLocalProjectsFromManifests, findLocalProjectById } from './local-projects';
-import { detectAllExternalRunning, type DetectableProject } from './external-project-status';
+import {
+  detectAllExternalRunning,
+  isQianfanRelayProject,
+  type DetectableProject,
+} from './external-project-status';
+import { canStopExternalProcess, stopExternalProcess } from './external-process-stop';
 import { WORKSPACES, runWorkspace } from './workspace-manager';
 
 import { getLogDir } from './file-logger';
@@ -64,6 +69,7 @@ import {
   githubUrlFromRemote,
   listGitStatusesAsync,
   countGitIgnoredFiles,
+  setGitSummaryCache,
 } from './git-manager';
 import {
   runHealthCheckLight,
@@ -210,33 +216,48 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('projects:detectExternalRunning', async () => {
     const projects = loadLocalProjectsFromManifests() as DetectableProject[];
     const detected = await detectAllExternalRunning(projects);
-    return detected
-      .filter((r) => r.status === 'running' || r.status === 'external-running')
-      .map((r) => {
-        if (r.status === 'running') {
-          const m = processManager.get(r.projectId);
-          if (!m) return null;
-          return {
-            projectId: m.projectId,
-            projectName: m.projectName,
-            command: m.command,
-            cwd: m.cwd,
-            status: 'running' as const,
-            pid: m.pid,
-          };
-        }
-        const proj = projects.find((p) => p.id === r.projectId);
-        return {
-          projectId: r.projectId,
-          projectName: r.projectName,
-          command: r.message || '',
-          cwd: proj?.localPath || '',
-          status: 'external-running' as const,
-          pid: r.pid,
-          externalSource: r.source,
-        };
-      })
-      .filter(Boolean);
+    const rows = [];
+    for (const r of detected.filter(
+      (x) => x.status === 'running' || x.status === 'external-running',
+    )) {
+      if (r.status === 'running') {
+        const m = processManager.get(r.projectId);
+        if (!m) continue;
+        rows.push({
+          projectId: m.projectId,
+          projectName: m.projectName,
+          command: m.command,
+          cwd: m.cwd,
+          status: 'running' as const,
+          pid: m.pid,
+        });
+        continue;
+      }
+      const proj = projects.find((p) => p.id === r.projectId) as DetectableProject & {
+        desktopStartCommand?: string | null;
+        startCommand?: string | null;
+        devCommand?: string | null;
+      };
+      const stopCheck = proj
+        ? await canStopExternalProcess(proj, r)
+        : { canStop: false, reason: 'no-project' };
+      rows.push({
+        projectId: r.projectId,
+        projectName: r.projectName,
+        command: r.message || '',
+        cwd: proj?.localPath || '',
+        status: 'external-running' as const,
+        pid: stopCheck.pid ?? r.pid,
+        externalSource: r.source,
+        canStopExternal: stopCheck.canStop,
+        externalStopHint: stopCheck.canStop
+          ? undefined
+          : stopCheck.reason === 'no-pid'
+            ? '已检测到外部运行，但暂时拿不到进程号，请在原窗口关闭。'
+            : undefined,
+      });
+    }
+    return rows;
   });
 
   ipcMain.handle('cloud:projects', async () => {
@@ -311,7 +332,15 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
       (project.code ? findLocalProjectById(String(project.code)) : null);
     const payload = pickSafeProjectPayload((local || project) as Record<string, unknown>);
     assertRiskAllowed(payload, 'start');
-    return processManager.start(payload);
+    const managed = await processManager.start(payload);
+    if (isQianfanRelayProject(payload)) {
+      await new Promise((r) => setTimeout(r, 4500));
+      const fresh = processManager.get(payload.id);
+      if (fresh?.startupWarning) {
+        return { ...managed, startupWarning: fresh.startupWarning };
+      }
+    }
+    return managed;
   });
 
   ipcMain.handle('process:stop', async (_e, projectId: string, projectMeta?: unknown) => {
@@ -319,6 +348,28 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     assertRiskAllowed(payload, 'stop');
     await processManager.stop(projectId, payload);
     return { ok: true };
+  });
+
+  ipcMain.handle('process:stopExternal', async (_e, payload: unknown) => {
+    const body = payload as {
+      projectId?: string;
+      project?: DetectableProject & {
+        desktopStartCommand?: string | null;
+        startCommand?: string | null;
+        devCommand?: string | null;
+      };
+      pid?: number;
+      source?: string;
+    };
+    if (!body?.projectId || !body?.project) throw new Error('缺少项目信息');
+    const result = await stopExternalProcess({
+      projectId: body.projectId,
+      project: body.project,
+      pid: body.pid,
+      source: body.source,
+    });
+    if (!result.ok) throw new Error(result.message);
+    return result;
   });
 
   ipcMain.handle('process:restart', async (_e, project: any) => {
@@ -637,6 +688,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
           });
         },
       });
+      setGitSummaryCache(results);
       return results;
     });
   });

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getConfigDir } from './config';
+import { enrichQianfanStartCommand, resolveManifestStartCommand } from './start-command';
 
 export interface DesktopCommandEntry {
   command: string;
@@ -83,65 +84,10 @@ export function resolveDesktopStartCommand(project: {
   devCommand?: string | null;
   commands?: Array<{ type?: string; command?: string; cwd?: string | null; enabled?: boolean }>;
 }): { command: string; cwd: string; type: 'desktop' | 'dev' | 'start' | 'npm' } | null {
-  if (project.desktopStartCommand?.trim()) {
-    return {
-      command: wrapUtf8(project.desktopStartCommand.trim()),
-      cwd: project.localPath || process.cwd(),
-      type: 'desktop',
-    };
-  }
-
-  const cmdProfile = project.commands?.find((c) => c.enabled !== false && c.type === 'desktop');
-  if (cmdProfile?.command?.trim()) {
-    return {
-      command: wrapUtf8(cmdProfile.command.trim()),
-      cwd: cmdProfile.cwd || project.localPath || process.cwd(),
-      type: 'desktop',
-    };
-  }
-
-  const local = lookupEntry(project);
-  if (local?.command?.trim()) {
-    return {
-      command: wrapUtf8(local.command.trim()),
-      cwd: local.cwd || project.localPath || process.cwd(),
-      type: 'desktop',
-    };
-  }
-
-  if (project.devCommand?.trim()) {
-    return {
-      command: wrapUtf8(project.devCommand.trim()),
-      cwd: project.localPath || process.cwd(),
-      type: 'dev',
-    };
-  }
-
-  if (project.startCommand?.trim()) {
-    return {
-      command: wrapUtf8(project.startCommand.trim()),
-      cwd: project.localPath || process.cwd(),
-      type: 'start',
-    };
-  }
-
-  if (project.localPath) {
-    const pkgPath = path.join(project.localPath, 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        const scripts = pkg.scripts || {};
-        if (scripts.dev)
-          return { command: wrapUtf8('npm run dev'), cwd: project.localPath, type: 'npm' };
-        if (scripts.start)
-          return { command: wrapUtf8('npm run start'), cwd: project.localPath, type: 'npm' };
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  return null;
+  const enriched = enrichQianfanStartCommand(project);
+  const resolved = resolveManifestStartCommand(enriched);
+  if (!resolved) return null;
+  return { command: resolved.command, cwd: resolved.cwd, type: resolved.type };
 }
 
 export function resolveLocalWebUrl(project: {

@@ -14,6 +14,8 @@ import { scanManifestFileForbidden } from './forbidden-url';
 import { analyzePortConflictsAsync } from './port-conflict-analyzer';
 import { loadLocalProjectsFromManifests } from './local-projects';
 import { detectAllExternalRunning, type DetectableProject } from './external-project-status';
+import { getGitSummaryCache } from './git-manager';
+import { validateProjectStartCommand } from './start-command';
 
 export type HealthProgress = (step: string, progress: number, message?: string) => void;
 
@@ -234,33 +236,52 @@ export async function checkGitQuick(
   projects: Parameters<typeof listGitStatusesAsync>[0],
   signal?: AbortSignal,
 ): Promise<HealthCheckItem> {
-  try {
-    const statuses = await listGitStatusesAsync(projects, {
-      fetchRemote: false,
-      concurrency: 2,
-      signal,
-    });
-    const unpushed = statuses.filter(
-      (g) => g.hasUnpushed || g.state === 'unpushed' || g.state === 'dirty',
-    );
+  void projects;
+  void signal;
+  const cached = getGitSummaryCache();
+  if (!cached) {
     return item({
       id: 'git_unpushed',
-      title: 'Git 未 push',
-      status: unpushed.length === 0 ? 'ok' : 'warn',
-      message: unpushed.length ? `${unpushed.length} 个项目有未 push 改动` : '全部已同步',
-      repairAction: 'nav:git',
-      repairable: unpushed.length > 0,
-      category: 'git',
-    });
-  } catch {
-    return item({
-      id: 'git_unpushed',
-      title: 'Git 未 push',
-      status: 'skipped',
-      message: 'Git 快速检查超时，已跳过',
+      title: 'Git 状态',
+      status: 'ok',
+      message: '未检查（可在总览点击「检查 Git」）',
       category: 'git',
     });
   }
+  return item({
+    id: 'git_unpushed',
+    title: 'Git 状态',
+    status: cached.unpushedCount === 0 ? 'ok' : 'warn',
+    message:
+      cached.unpushedCount === 0
+        ? `已检查：${cached.total} 个项目均已同步`
+        : `已检查：${cached.unpushedCount} 个项目有未上传改动`,
+    repairAction: cached.unpushedCount > 0 ? 'nav:git' : undefined,
+    repairable: cached.unpushedCount > 0,
+    category: 'git',
+  });
+}
+
+function checkStartCommandValidity(projects: Array<Record<string, unknown>>): HealthCheckItem {
+  const issues: string[] = [];
+  let okCount = 0;
+  for (const p of projects) {
+    const v = validateProjectStartCommand(p as Parameters<typeof validateProjectStartCommand>[0]);
+    if (v.ok) {
+      okCount += 1;
+    } else {
+      issues.push(`${p.name}: ${v.message}`);
+    }
+  }
+  return item({
+    id: 'start_command',
+    title: '启动命令有效性',
+    status: issues.length === 0 ? 'ok' : 'warn',
+    message: issues.length
+      ? `${issues.length} 个项目需关注：${issues.slice(0, 3).join('；')}${issues.length > 3 ? '…' : ''}`
+      : `${okCount} 个项目启动命令有效`,
+    category: 'project',
+  });
 }
 
 export function checkExeConfig(): HealthCheckItem[] {
@@ -313,7 +334,8 @@ export async function runHealthCheckSimple(signal?: AbortSignal): Promise<Health
   const cfg = loadConfig();
   const items: HealthCheckItem[] = [
     checkLocalManifests(),
-    await checkGitQuick(localProjects as Parameters<typeof checkGitQuick>[0], signal),
+    checkStartCommandValidity(localProjects),
+    checkGitQuick(localProjects as Parameters<typeof checkGitQuick>[0], signal),
     await checkPorts(signal),
     item({
       id: 'exe_config',

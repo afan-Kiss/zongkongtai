@@ -8,7 +8,6 @@ import { SkeletonRow } from '@/components/TaskProgressPanel';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
-import { GIT_UNPUSHED_CACHE_KEY } from '@/lib/projectDedup';
 import { humanizeUserError } from '@/lib/userErrors';
 
 const STATE_LABEL: Record<
@@ -29,6 +28,7 @@ const DEFAULT_COMMIT_MESSAGE = 'chore: update project changes';
 
 export function GitPage() {
   const pushToast = useAppStore((s) => s.pushToast);
+  const setGitSummary = useAppStore((s) => s.setGitSummary);
   const projects = useAppStore((s) => s.projects);
   const selectProject = useAppStore((s) => s.selectProject);
   const [rows, setRows] = useState<GitProjectStatus[]>([]);
@@ -71,7 +71,14 @@ export function GitPage() {
             r.state === 'behind' ||
             r.state === 'needs_pull',
         ).length;
-        sessionStorage.setItem(GIT_UNPUSHED_CACHE_KEY, String(unpushed));
+        const dirty = results.filter((r) => r.hasUncommitted || r.state === 'dirty').length;
+        setGitSummary({
+          checkedAt: new Date().toISOString(),
+          unpushedCount: unpushed,
+          dirtyCount: dirty,
+          total: results.length,
+          checking: false,
+        });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setLoadError(msg);
@@ -80,7 +87,7 @@ export function GitPage() {
         setLoading(false);
       }
     },
-    [loading, pushToast, runTask],
+    [loading, pushToast, runTask, setGitSummary],
   );
 
   useEffect(() => {

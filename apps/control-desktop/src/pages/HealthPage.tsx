@@ -26,6 +26,7 @@ const DOT: Record<string, string> = {
 
 const SIMPLE_IDS = new Set([
   'local_manifest',
+  'start_command',
   'git_unpushed',
   'ports',
   'exe_config',

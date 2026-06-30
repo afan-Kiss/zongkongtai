@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { deduplicateProjects } from '@/lib/projectDedup';
 import type { PortConflictAnalysis } from '@zhubo/control-shared';
 import type { AgentStatus, NavPage, ProcessInfo, Project, ToastItem } from '@/types/desktop';
+import {
+  EMPTY_GIT_SUMMARY,
+  type GitSummary,
+  saveGitSummaryToStorage,
+  loadGitSummaryFromStorage,
+} from '@/lib/gitSummary';
 
 interface AppState {
   page: NavPage;
@@ -25,6 +31,7 @@ interface AppState {
   activeTerminalId: string | null;
   toasts: ToastItem[];
   showDuplicateProjects: boolean;
+  gitSummary: GitSummary;
   setCloud: (ok: boolean, msg: string, extra?: Partial<AppState>) => void;
   setAgentStatus: (s: AgentStatus | null) => void;
   setProjects: (p: Project[]) => void;
@@ -40,12 +47,32 @@ interface AppState {
   setPortConflictAnalysis: (a: PortConflictAnalysis | null) => void;
   setPortConflictOpen: (v: boolean) => void;
   ignorePortConflict: (id: string) => void;
+  setGitSummary: (summary: Partial<GitSummary>) => void;
+  clearGitSummary: () => void;
+  refreshGitSummary: (fetchRemote?: boolean) => Promise<GitSummary>;
 }
 
 function countRunning(processes: Record<string, ProcessInfo>) {
   return Object.values(processes).filter(
     (p) => p.status === 'running' || p.status === 'external-running',
   ).length;
+}
+
+let gitRefreshPromise: Promise<GitSummary> | null = null;
+
+function summarizeGitRows(
+  rows: Array<{ hasUnpushed?: boolean; hasUncommitted?: boolean; state?: string }>,
+) {
+  const unpushed = rows.filter(
+    (r) =>
+      r.hasUnpushed ||
+      r.state === 'unpushed' ||
+      r.state === 'dirty' ||
+      r.state === 'behind' ||
+      r.state === 'needs_pull',
+  ).length;
+  const dirty = rows.filter((r) => r.hasUncommitted || r.state === 'dirty').length;
+  return { unpushed, dirty, total: rows.length };
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -70,6 +97,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTerminalId: null,
   toasts: [],
   showDuplicateProjects: false,
+  gitSummary: loadGitSummaryFromStorage() ?? EMPTY_GIT_SUMMARY,
   setCloud: (ok, msg, extra) => set({ cloudConnected: ok, cloudMessage: msg, ...extra }),
   setAgentStatus: (agentStatus) =>
     set({
@@ -132,4 +160,48 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? s.portConflictIgnoredIds
         : [...s.portConflictIgnoredIds, id],
     })),
+  setGitSummary: (partial) =>
+    set((s) => {
+      const gitSummary = { ...s.gitSummary, ...partial };
+      saveGitSummaryToStorage(gitSummary);
+      return { gitSummary };
+    }),
+  clearGitSummary: () => {
+    saveGitSummaryToStorage(EMPTY_GIT_SUMMARY);
+    set({ gitSummary: { ...EMPTY_GIT_SUMMARY } });
+  },
+  refreshGitSummary: async (fetchRemote = false) => {
+    if (gitRefreshPromise) return gitRefreshPromise;
+    set((s) => ({ gitSummary: { ...s.gitSummary, checking: true } }));
+    gitRefreshPromise = (async () => {
+      try {
+        const rows = (await window.zhuboDesktop.git.list({ fetchRemote })) as Array<{
+          hasUnpushed?: boolean;
+          hasUncommitted?: boolean;
+          state?: string;
+        }>;
+        const { unpushed, dirty, total } = summarizeGitRows(rows);
+        const gitSummary: GitSummary = {
+          checkedAt: new Date().toISOString(),
+          unpushedCount: unpushed,
+          dirtyCount: dirty,
+          total,
+          checking: false,
+        };
+        saveGitSummaryToStorage(gitSummary);
+        set({ gitSummary });
+        return gitSummary;
+      } catch {
+        const gitSummary: GitSummary = {
+          ...(get().gitSummary.checkedAt ? get().gitSummary : EMPTY_GIT_SUMMARY),
+          checking: false,
+        };
+        set({ gitSummary });
+        return gitSummary;
+      } finally {
+        gitRefreshPromise = null;
+      }
+    })();
+    return gitRefreshPromise;
+  },
 }));

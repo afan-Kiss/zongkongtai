@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { RefreshCw, Activity } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, Activity, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { ProjectCard } from '@/components/ProjectCard';
@@ -15,25 +15,19 @@ export function OverviewPage() {
   const projects = useAppStore((s) => s.projects);
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
   const runningCount = useAppStore((s) => s.runningCount);
+  const gitSummary = useAppStore((s) => s.gitSummary);
+  const refreshGitSummary = useAppStore((s) => s.refreshGitSummary);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const pushToast = useAppStore((s) => s.pushToast);
   const setPage = useAppStore((s) => s.setPage);
   const { runTask } = useTaskRunner();
   const [refreshing, setRefreshing] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
-  const [gitUnpushed, setGitUnpushed] = useState(0);
 
   const featured = dailyFeaturedProjects(projects);
   const localOk = projects.length > 0;
-
-  useEffect(() => {
-    window.zhuboDesktop.git
-      .list({ fetchRemote: false })
-      .then((rows: Array<{ hasUnpushed?: boolean }>) => {
-        setGitUnpushed(rows.filter((r) => r.hasUnpushed).length);
-      })
-      .catch(() => setGitUnpushed(0));
-  }, [projects.length]);
+  const gitChecked = gitSummary.checkedAt != null;
+  const gitUnpushed = gitSummary.unpushedCount ?? 0;
 
   const refresh = async () => {
     setRefreshing(true);
@@ -44,16 +38,22 @@ export function OverviewPage() {
         useAppStore.getState().portConflictIgnoredIds,
       );
       useAppStore.getState().setPortConflictAnalysis(portAnalysis);
-      const rows = await window.zhuboDesktop.git.list({ fetchRemote: false });
-      setGitUnpushed(
-        (rows as Array<{ hasUnpushed?: boolean }>).filter((r) => r.hasUnpushed).length,
-      );
+      await refreshGitSummary(false);
       await refreshExternalRunning();
       pushToast('success', '状态已刷新');
     } catch {
       pushToast('info', '刷新失败，请稍后重试');
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const checkGit = async () => {
+    try {
+      await refreshGitSummary(false);
+      pushToast('success', 'Git 状态已更新');
+    } catch {
+      pushToast('info', 'Git 检查失败，请稍后重试');
     }
   };
 
@@ -86,8 +86,15 @@ export function OverviewPage() {
           <p className="text-sm text-muted-foreground">本地项目 · Git · 端口 · 运行状态</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={refresh} disabled={refreshing}>
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> 刷新状态
+          <Button
+            variant="secondary"
+            onClick={refresh}
+            disabled={refreshing || gitSummary.checking}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing || gitSummary.checking ? 'animate-spin' : ''}`}
+            />{' '}
+            刷新状态
           </Button>
           <Button onClick={quickHealth} disabled={healthBusy}>
             <Activity className={`h-4 w-4 ${healthBusy ? 'animate-pulse' : ''}`} /> 简单体检
@@ -112,11 +119,30 @@ export function OverviewPage() {
         </Card>
         <Card>
           <CardHeader>
-            <div className="text-sm text-muted-foreground">Git</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm text-muted-foreground">Git</div>
+              {!gitChecked && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  onClick={checkGit}
+                  disabled={gitSummary.checking}
+                >
+                  <GitBranch className="h-3 w-3" /> 检查 Git
+                </Button>
+              )}
+            </div>
             <div
-              className={`text-lg font-medium ${gitUnpushed > 0 ? 'text-amber-400' : 'text-green-400'}`}
+              className={`text-lg font-medium ${
+                !gitChecked
+                  ? 'text-muted-foreground'
+                  : gitUnpushed > 0
+                    ? 'text-amber-400'
+                    : 'text-green-400'
+              }`}
             >
-              {gitUnpushed > 0 ? `${gitUnpushed} 个未上传` : '已全部上传'}
+              {!gitChecked ? '未检查' : gitUnpushed > 0 ? `${gitUnpushed} 个未上传` : '已全部上传'}
             </div>
           </CardHeader>
         </Card>

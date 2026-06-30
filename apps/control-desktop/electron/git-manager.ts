@@ -605,6 +605,41 @@ export function githubUrlFromRemote(remote?: string): string | null {
   return `https://github.com/${m[1]}`;
 }
 
+export interface GitSummaryCache {
+  checkedAt: string;
+  unpushedCount: number;
+  dirtyCount: number;
+  total: number;
+}
+
+let gitSummaryCache: GitSummaryCache | null = null;
+
+export function setGitSummaryCache(rows: GitProjectStatus[]) {
+  const unpushed = rows.filter(
+    (r) =>
+      r.hasUnpushed ||
+      r.state === 'unpushed' ||
+      r.state === 'dirty' ||
+      r.state === 'behind' ||
+      r.state === 'needs_pull',
+  ).length;
+  const dirty = rows.filter((r) => r.hasUncommitted || r.state === 'dirty').length;
+  gitSummaryCache = {
+    checkedAt: new Date().toISOString(),
+    unpushedCount: unpushed,
+    dirtyCount: dirty,
+    total: rows.length,
+  };
+}
+
+export function getGitSummaryCache(): GitSummaryCache | null {
+  return gitSummaryCache;
+}
+
+export function clearGitSummaryCache() {
+  gitSummaryCache = null;
+}
+
 /** @deprecated 同步接口已移除，请用 listGitStatusesAsync */
 export function listGitStatuses(
   projects: Parameters<typeof collectGitProjects>[0],
