@@ -25,6 +25,9 @@ scripts/acceptance-report.json
 scripts/port-fix-report.json
 apps/control-desktop/dist-desktop/
 apps/control-desktop/dist-desktop-pack/
+apps/control-desktop/dist-desktop-pack2/
+apps/control-desktop/dist-desktop-pack3/
+deploy/aliyun/__pycache__/
 apps/control-desktop/dist-electron/
 apps/control-desktop/dist/
 apps/control-desktop/native-helper/Zhubo.NativeHelper/bin/
