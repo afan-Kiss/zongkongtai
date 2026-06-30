@@ -72,6 +72,7 @@ export interface ProjectPortInput {
   name: string;
   code?: string;
   localPath?: string | null;
+  riskLevel?: string | null;
   ports?: Array<{ port: number; role?: string | null; conflictLevel?: string | null }>;
   manifestDuplicatePorts?: number[];
 }

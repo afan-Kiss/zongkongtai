@@ -38,12 +38,36 @@ if (!fs.existsSync(dialogPath)) {
     'duplicate_registration',
     'config_conflict',
     'real_occupation',
+    '总控启动并托管的旧进程',
   ]) {
     if (!dialog.includes(needle)) failures.push(`PortConflictDialog missing ${needle}`);
   }
   if (!dialog.includes('safeToKill')) {
     failures.push('PortConflictDialog must gate kill button on safeToKill');
   }
+  if (!/item\.safeToKill[\s\S]*关闭旧进程/.test(dialog)) {
+    failures.push('PortConflictDialog kill button must be guarded by safeToKill');
+  }
+}
+
+const analyzer = read(path.join(ELECTRON, 'port-conflict-analyzer.ts'));
+if (!analyzer.includes('collectManagedPidRegistry')) {
+  failures.push('port-conflict-analyzer must collect managed pid registry');
+}
+if (!analyzer.includes('不是总控托管进程，建议手动确认')) {
+  failures.push('port-conflict-analyzer must warn when only cmdline matches project');
+}
+if (/matchProjectByCommand[\s\S]{0,500}safeToKill:\s*true/.test(analyzer)) {
+  failures.push('cmdline match alone must not set safeToKill=true');
+}
+if (!analyzer.includes('BLOCKED_PROJECT_CODES') || !analyzer.includes('zhubo-analysis')) {
+  failures.push('port-conflict-analyzer must block core service projects');
+}
+if (!analyzer.includes('UNSAFE_PROCESS_RE') || !analyzer.includes('nginx')) {
+  failures.push('port-conflict-analyzer must block nginx/x-ui process names');
+}
+if (!analyzer.includes('SUGGESTION_UNSAFE')) {
+  failures.push('port-conflict-analyzer must default unknown processes to safeToKill=false');
 }
 
 const shared = read(path.join(SHARED, 'portConflict.ts'));
@@ -111,4 +135,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checks: 12 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: 18 }, null, 2));

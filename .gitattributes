@@ -8,3 +8,4 @@
 *.py text eol=lf
 *.css text eol=lf
 *.md text eol=lf
+.prettierignore text eol=lf

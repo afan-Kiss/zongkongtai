@@ -8,16 +8,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 
 const CORE_FILES = [
+  'packages/control-shared/src/portConflict.ts',
+  'apps/control-desktop/electron/port-conflict-analyzer.ts',
   'apps/control-desktop/electron/git-manager.ts',
   'apps/control-desktop/electron/cloud-client.ts',
   'apps/control-desktop/electron/ipc.ts',
   'apps/control-desktop/electron/preload.ts',
   'packages/control-shared/src/gitSecurity.ts',
+  'apps/control-desktop/src/stores/appStore.ts',
+  'apps/control-desktop/src/components/PortConflictDialog.tsx',
   'apps/control-desktop/src/pages/GitPage.tsx',
   'apps/control-desktop/src/pages/SettingsPage.tsx',
   'apps/control-desktop/src/pages/HealthPage.tsx',
+  'apps/control-desktop/src/pages/OverviewPage.tsx',
   'apps/control-desktop/src/components/layout/Shell.tsx',
   'apps/control-desktop/native-helper/Zhubo.NativeHelper/Program.cs',
+  'scripts/acceptance-port-conflicts.mjs',
+  'scripts/acceptance-source-format.mjs',
+  '.gitattributes',
   '.gitignore',
   'package.json',
 ];
@@ -79,8 +87,29 @@ if (!/gitCommitAndPush[\s\S]*finalizeGitCommitPaths/.test(gitMgr)) {
 }
 
 const gitAttrs = read(path.join(ROOT, '.gitattributes'));
-for (const needle of ['*.ts text eol=lf', '*.tsx text eol=lf', '*.cs text eol=lf']) {
+for (const needle of [
+  '*.ts text eol=lf',
+  '*.tsx text eol=lf',
+  '*.js text eol=lf',
+  '*.mjs text eol=lf',
+  '*.json text eol=lf',
+  '*.cs text eol=lf',
+  '.gitignore text eol=lf',
+  '.prettierignore text eol=lf',
+]) {
   if (!gitAttrs.includes(needle)) failures.push(`.gitattributes missing ${needle}`);
+}
+
+const portAnalyzer = read(
+  path.join(ROOT, 'apps/control-desktop/electron/port-conflict-analyzer.ts'),
+);
+if (!portAnalyzer.includes('collectManagedPidRegistry')) {
+  failures.push('port-conflict-analyzer must use collectManagedPidRegistry');
+}
+if (portAnalyzer.includes('safeToKill: true') && portAnalyzer.includes('matchProjectByCommand')) {
+  if (/matchProjectByCommand[\s\S]{0,400}safeToKill:\s*true/.test(portAnalyzer)) {
+    failures.push('matchProjectByCommand must not set safeToKill=true');
+  }
 }
 
 if (failures.length) {
@@ -89,4 +118,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, files: CORE_FILES.length, checks: 6 }, null, 2));
+console.log(JSON.stringify({ ok: true, files: CORE_FILES.length, checks: 8 }, null, 2));

@@ -9,14 +9,48 @@ import {
   type ProjectPortInput,
 } from '../../../packages/control-shared/src/portConflict';
 import { MANIFEST_FILENAME } from '../../../packages/control-shared/src/manifest';
+import {
+  DEFAULT_RISK_BY_CODE,
+  normalizeRiskLevel,
+  type RiskLevel,
+} from '../../../packages/control-shared/src/steward';
 import { cloudClient } from './cloud-client';
-import { processManager } from './process-manager';
+import { processManager, type ProcessStatus } from './process-manager';
 import { scanLocalPortsAsync, invalidatePortCache } from './port-manager';
 import { runCommand } from './async-exec';
-import { readProjectManifest } from './manifest-scanner';
 import treeKill from 'tree-kill';
 
 const CMD_TIMEOUT_MS = 3000;
+
+const BLOCKED_PROJECT_CODES = new Set([
+  'zhubo-control',
+  'zhubo-analysis',
+  'qianfan-relay',
+  'doudian-bot',
+]);
+
+const UNSAFE_PROCESS_RE =
+  /^(nginx(\.exe)?|x-ui(\.exe)?|xui|powershell(\.exe)?|pwsh(\.exe)?|chrome(\.exe)?|msedge(\.exe)?|firefox(\.exe)?|svchost(\.exe)?|system|csrss(\.exe)?|lsass(\.exe)?)$/i;
+
+const UNSAFE_CMD_PATTERNS = [
+  /nginx/i,
+  /x-ui/i,
+  /\bxui\b/i,
+  /zhubo-analysis/i,
+  /control-server/i,
+  /control-web/i,
+  /zhubo-control-center/i,
+  /总控台/i,
+];
+
+interface ManagedPidEntry {
+  projectId: string;
+  projectName: string;
+  projectCode?: string;
+  riskLevel: RiskLevel;
+  status: ProcessStatus;
+  source: 'pid' | 'session';
+}
 
 async function getProcessCommandLine(pid: number, signal?: AbortSignal): Promise<string> {
   try {
@@ -35,10 +69,6 @@ async function getProcessCommandLine(pid: number, signal?: AbortSignal): Promise
   } catch {
     return '';
   }
-}
-
-function normalizePath(p: string): string {
-  return p.replace(/\//g, '\\').toLowerCase();
 }
 
 function detectManifestDuplicatePorts(manifestPath: string): number[] {
@@ -71,10 +101,40 @@ function buildProjectInputs(projects: any[]): ProjectPortInput[] {
       name: p.name,
       code: p.code,
       localPath: p.localPath,
+      riskLevel: p.riskLevel,
       ports: p.ports,
       manifestDuplicatePorts: manifestDups.length ? manifestDups : undefined,
     };
   });
+}
+
+function projectRisk(code?: string, explicit?: string | null): RiskLevel {
+  return normalizeRiskLevel(explicit || (code ? DEFAULT_RISK_BY_CODE[code] : undefined));
+}
+
+/** 仅 process-manager 已知 pid / session pid — 命令行匹配不算托管 */
+function collectManagedPidRegistry(projects: ProjectPortInput[]): Map<number, ManagedPidEntry> {
+  const map = new Map<number, ManagedPidEntry>();
+  for (const proc of processManager.getAll()) {
+    const proj = projects.find((p) => p.id === proc.projectId);
+    const risk = projectRisk(proj?.code, proj?.riskLevel);
+    const entry = {
+      projectId: proc.projectId,
+      projectName: proc.projectName,
+      projectCode: proj?.code,
+      riskLevel: risk,
+      status: proc.status,
+    };
+    if (proc.pid) map.set(proc.pid, { ...entry, source: 'pid' });
+    for (const session of proc.sessions) {
+      if (session.pid) map.set(session.pid, { ...entry, source: 'session' });
+    }
+  }
+  return map;
+}
+
+function normalizePath(p: string): string {
+  return p.replace(/\//g, '\\').toLowerCase();
 }
 
 function matchProjectByCommand(
@@ -91,30 +151,83 @@ function matchProjectByCommand(
   return undefined;
 }
 
+function isUnsafeSystemProcess(processName?: string, cmd = ''): boolean {
+  const name = (processName || '').trim();
+  if (name && UNSAFE_PROCESS_RE.test(name)) return true;
+  return UNSAFE_CMD_PATTERNS.some((re) => re.test(cmd));
+}
+
+function isKillBlockedProject(code?: string, risk?: RiskLevel): boolean {
+  if (!code && !risk) return false;
+  if (code && BLOCKED_PROJECT_CODES.has(code)) return true;
+  return risk === 'protected' || risk === 'high';
+}
+
+const SUGGESTION_UNSAFE =
+  '这个端口被进程占用了，但总控不能确认它是不是旧进程。为了避免误关其他软件，暂时不提供一键关闭。你可以复制详情后再确认。';
+
+const SUGGESTION_POSSIBLE_NOT_MANAGED =
+  '看起来可能属于这个项目，但不是总控托管进程，建议手动确认。';
+
+const SUGGESTION_STALE_MANAGED = '这是总控之前启动的旧进程，可以安全关闭。';
+
+const SUGGESTION_CORE_BLOCKED = '这是受保护的核心服务进程，总控不会自动关闭。';
+
 function enrichOccupationItem(
   item: PortConflictItem,
   projects: ProjectPortInput[],
-  managedPids: Map<number, string>,
+  managedRegistry: Map<number, ManagedPidEntry>,
   commandLine?: string,
 ): PortConflictItem {
   if (item.type !== 'real_occupation' || !item.pid) return item;
 
   const cmd = commandLine || item.commandLine || '';
-  const managedProjectId = item.pid ? managedPids.get(item.pid) : undefined;
+  const managed = managedRegistry.get(item.pid);
 
-  if (managedProjectId) {
-    const proj = projects.find((p) => p.id === managedProjectId);
-    if (proj) {
+  if (isUnsafeSystemProcess(item.processName, cmd)) {
+    return {
+      ...item,
+      commandLine: cmd || item.commandLine,
+      safeToKill: false,
+      suggestion: SUGGESTION_UNSAFE,
+      plainText: `${item.port} 被系统或核心服务进程占用 (PID ${item.pid})，请手动确认。`,
+    };
+  }
+
+  if (managed) {
+    const proj = projects.find((p) => p.id === managed.projectId);
+    if (isKillBlockedProject(managed.projectCode, managed.riskLevel)) {
       return {
         ...item,
         commandLine: cmd || item.commandLine,
-        projects: [{ id: proj.id, name: proj.name, code: proj.code, localPath: proj.localPath }],
-        safeToKill: true,
-        killProjectId: proj.id,
-        suggestion: `${item.port} 当前被 ${item.processName || '进程'} 占用。如果这是「${proj.name}」旧进程，可以关闭后重试。`,
-        plainText: `${item.port} 当前被 ${item.processName || '进程'} (PID ${item.pid}) 占用。`,
+        projects: proj
+          ? [{ id: proj.id, name: proj.name, code: proj.code, localPath: proj.localPath }]
+          : item.projects,
+        safeToKill: false,
+        suggestion: SUGGESTION_CORE_BLOCKED,
+        plainText: `${item.port} 涉及受保护项目，不提供一键关闭。`,
       };
     }
+    if (managed.status === 'running' || managed.status === 'starting') {
+      return {
+        ...item,
+        commandLine: cmd || item.commandLine,
+        safeToKill: false,
+        suggestion: '这是总控正在运行的托管进程，不需要关闭。',
+        plainText: `${item.port} 由总控托管运行中 (PID ${item.pid})。`,
+      };
+    }
+    return {
+      ...item,
+      commandLine: cmd || item.commandLine,
+      projects: proj
+        ? [{ id: proj.id, name: proj.name, code: proj.code, localPath: proj.localPath }]
+        : item.projects,
+      safeToKill: true,
+      killProjectId: managed.projectId,
+      suggestion: SUGGESTION_STALE_MANAGED,
+      plainText: `${item.port} 被总控托管的旧进程占用 (PID ${item.pid})。`,
+    };
   }
 
   const matched = cmd ? matchProjectByCommand(cmd, projects) : undefined;
@@ -125,10 +238,9 @@ function enrichOccupationItem(
       projects: [
         { id: matched.id, name: matched.name, code: matched.code, localPath: matched.localPath },
       ],
-      safeToKill: true,
-      killProjectId: matched.id,
-      suggestion: `${item.port} 当前被 ${item.processName || '进程'} 占用。如果这是「${matched.name}」旧进程，可以关闭后重试。`,
-      plainText: `${item.port} 当前被 ${item.processName || '进程'} (PID ${item.pid}) 占用。`,
+      safeToKill: false,
+      suggestion: `看起来可能属于「${matched.name}」，${SUGGESTION_POSSIBLE_NOT_MANAGED}`,
+      plainText: `${item.port} 可能属于「${matched.name}」，但不是总控托管进程。`,
     };
   }
 
@@ -136,9 +248,14 @@ function enrichOccupationItem(
     ...item,
     commandLine: cmd || item.commandLine,
     safeToKill: false,
-    suggestion: `这个端口被${item.processName ? ` ${item.processName}` : '未知进程'}占用，不能自动关闭，避免误杀其他软件。`,
+    suggestion: SUGGESTION_UNSAFE,
     plainText: `${item.port} 被未知进程占用 (PID ${item.pid})，请手动确认。`,
   };
+}
+
+function isActiveManagedOccupation(pid: number, registry: Map<number, ManagedPidEntry>): boolean {
+  const entry = registry.get(pid);
+  return !!entry && (entry.status === 'running' || entry.status === 'starting');
 }
 
 export async function analyzePortConflictsAsync(
@@ -153,13 +270,10 @@ export async function analyzePortConflictsAsync(
   ]);
 
   const projectInputs = buildProjectInputs(projects);
-  const managedPids = new Map<number, string>();
-  for (const proc of processManager.getAll()) {
-    if (proc.pid && proc.status === 'running') managedPids.set(proc.pid, proc.projectId);
-  }
+  const managedRegistry = collectManagedPidRegistry(projectInputs);
 
-  const occPids = new Set<number>();
   const pre = analyzePortConflicts(cloudPorts, localPorts, projectInputs, { ignoredIds });
+  const occPids = new Set<number>();
   for (const item of pre.items) {
     if (item.type === 'real_occupation' && item.pid) occPids.add(item.pid);
   }
@@ -171,18 +285,16 @@ export async function analyzePortConflictsAsync(
     }),
   );
 
-  return summarizePortConflictItems(
-    analyzePortConflicts(cloudPorts, localPorts, projectInputs, {
-      ignoredIds,
-      enrich: (item) => {
-        if (item.type !== 'real_occupation' || !item.pid) return item;
-        if (managedPids.has(item.pid)) {
-          return { ...item, safeToKill: false };
-        }
-        return enrichOccupationItem(item, projectInputs, managedPids, cmdByPid.get(item.pid));
-      },
-    }).items.filter((i) => !(i.type === 'real_occupation' && i.pid && managedPids.has(i.pid))),
+  const items = analyzePortConflicts(cloudPorts, localPorts, projectInputs, {
+    ignoredIds,
+    enrich: (item) =>
+      enrichOccupationItem(item, projectInputs, managedRegistry, cmdByPid.get(item.pid!)),
+  }).items.filter(
+    (i) =>
+      !(i.type === 'real_occupation' && i.pid && isActiveManagedOccupation(i.pid, managedRegistry)),
   );
+
+  return summarizePortConflictItems(items);
 }
 
 export async function safeKillPortProcess(
@@ -197,6 +309,11 @@ export async function safeKillPortProcess(
   );
   if (!item?.safeToKill || item.killProjectId !== projectId) {
     return { ok: false, message: '该进程无法安全关闭，请手动确认后再操作。' };
+  }
+
+  const cmd = item.commandLine || (await getProcessCommandLine(pid));
+  if (isUnsafeSystemProcess(item.processName, cmd)) {
+    return { ok: false, message: '该进程属于系统或核心服务，不能关闭。' };
   }
 
   return new Promise((resolve) => {

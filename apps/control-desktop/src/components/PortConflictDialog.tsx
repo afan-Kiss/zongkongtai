@@ -65,7 +65,7 @@ function ConflictRow({
   const killProcess = async () => {
     if (!item.pid || !item.killProjectId) return;
     const ok = window.confirm(
-      `即将关闭进程 ${item.processName || ''} (PID ${item.pid})。\n\n${item.suggestion}\n\n确认继续？`,
+      `这个进程是总控启动并托管的旧进程，可以关闭。确定关闭吗？\n\n进程：${item.processName || '未知'} (PID ${item.pid})\n端口：${item.port}`,
     );
     if (!ok) return;
     setBusy(true);
