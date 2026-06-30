@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, RefreshCw, Wrench, ChevronRight } from 'lucide-react';
+import { Activity, RefreshCw, Wrench, ChevronRight, Play } from 'lucide-react';
 import type { HealthCheckItem, HealthCheckReport } from '@zhubo/control-shared';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { TaskProgressPanel } from '@/components/TaskProgressPanel';
 import { useAppStore } from '@/stores/appStore';
+import { useTaskRunner } from '@/hooks/useTaskRunner';
 
 const STATUS_STYLE: Record<string, string> = {
   ok: 'border-green-500/40 bg-green-500/10',
@@ -27,24 +29,45 @@ export function HealthPage() {
   const pushToast = useAppStore((s) => s.pushToast);
   const setPage = useAppStore((s) => s.setPage);
   const [report, setReport] = useState<HealthCheckReport | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingLight, setLoadingLight] = useState(false);
+  const [fullRunning, setFullRunning] = useState(false);
   const [repairing, setRepairing] = useState<string | null>(null);
+  const { active, runTask, cancel } = useTaskRunner();
 
-  const run = useCallback(async () => {
-    setLoading(true);
+  const loadLight = useCallback(async () => {
+    setLoadingLight(true);
     try {
-      const r = (await window.zhuboDesktop.steward.healthCheck()) as HealthCheckReport;
+      const r = (await window.zhuboDesktop.steward.healthCheckLight()) as HealthCheckReport;
       setReport(r);
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      setLoadingLight(false);
     }
   }, [pushToast]);
 
   useEffect(() => {
-    run();
-  }, [run]);
+    loadLight();
+  }, [loadLight]);
+
+  const runFull = async () => {
+    if (fullRunning) {
+      pushToast('info', '这个任务正在进行中，请稍等。');
+      return;
+    }
+    setFullRunning(true);
+    try {
+      const result = (await runTask(() =>
+        window.zhuboDesktop.steward.healthCheck(),
+      )) as HealthCheckReport;
+      setReport(result);
+      pushToast('success', '完整体检完成');
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : String(e));
+    } finally {
+      setFullRunning(false);
+    }
+  };
 
   const repair = async (item: HealthCheckItem) => {
     if (!item.repairAction) return;
@@ -60,7 +83,7 @@ export function HealthPage() {
     try {
       const r = await window.zhuboDesktop.steward.repair(item.repairAction);
       pushToast(r.ok ? 'success' : 'error', r.message);
-      if (r.ok) await run();
+      if (r.ok) await loadLight();
     } finally {
       setRepairing(null);
     }
@@ -68,16 +91,22 @@ export function HealthPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <TaskProgressPanel task={active} onCancel={cancel} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             <Activity className="h-6 w-6 text-primary" /> 系统体检
           </h1>
-          <p className="text-sm text-muted-foreground">红黄绿状态 · 能修的直接一键修复</p>
+          <p className="text-sm text-muted-foreground">打开页面仅轻量检查 · 点击开始跑完整体检</p>
         </div>
-        <Button variant="secondary" onClick={run} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> 重新体检
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={loadLight} disabled={loadingLight}>
+            <RefreshCw className={`h-4 w-4 ${loadingLight ? 'animate-spin' : ''}`} /> 刷新概览
+          </Button>
+          <Button onClick={runFull} disabled={fullRunning}>
+            <Play className={`h-4 w-4 ${fullRunning ? 'animate-pulse' : ''}`} /> 开始完整体检
+          </Button>
+        </div>
       </div>
 
       {report && (

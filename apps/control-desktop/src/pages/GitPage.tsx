@@ -15,7 +15,9 @@ import type { GitProjectStatus } from '@zhubo/control-shared';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, Badge } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { TaskProgressPanel, SkeletonRow } from '@/components/TaskProgressPanel';
 import { useAppStore } from '@/stores/appStore';
+import { useTaskRunner } from '@/hooks/useTaskRunner';
 
 const STATE_LABEL: Record<
   string,
@@ -39,36 +41,61 @@ export function GitPage() {
   const [selected, setSelected] = useState<GitProjectStatus | null>(null);
   const [commitMsg, setCommitMsg] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const list = (await window.zhuboDesktop.git.list()) as GitProjectStatus[];
-      setRows(list);
-    } catch (e) {
-      pushToast('error', e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [pushToast]);
+  const { active, runTask, cancel } = useTaskRunner();
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    const off = window.zhuboDesktop.tasks.onProgress((task) => {
+      const partial = (task as { partial?: { results?: GitProjectStatus[] } }).partial?.results;
+      if (partial?.length) setRows([...partial]);
+    });
+    return off;
+  }, []);
+
+  const refresh = useCallback(
+    async (fetchRemote = false) => {
+      if (loading) {
+        pushToast('info', '这个任务正在进行中，请稍等。');
+        return;
+      }
+      setLoading(true);
+      setRows([]);
+      try {
+        const results = (await runTask(() =>
+          window.zhuboDesktop.git.list({ fetchRemote }),
+        )) as GitProjectStatus[];
+        setRows(results);
+      } catch (e) {
+        pushToast('error', e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loading, pushToast, runTask],
+  );
+
+  useEffect(() => {
+    refresh(false);
+  }, []);
 
   const doCommitPush = async (row: GitProjectStatus, pushOnly = false) => {
+    if (busy) {
+      pushToast('info', '这个任务正在进行中，请稍等。');
+      return;
+    }
     setBusy(true);
     try {
-      const r = await window.zhuboDesktop.git.commitPush({
-        localPath: row.localPath,
-        message: commitMsg || undefined,
-        paths: row.safeToCommitPaths,
-        pushOnly,
-      });
+      const r = (await runTask(() =>
+        window.zhuboDesktop.git.commitPush({
+          localPath: row.localPath,
+          message: commitMsg || undefined,
+          paths: row.safeToCommitPaths,
+          pushOnly,
+        }),
+      )) as { ok: boolean; message: string; commitHash?: string };
       if (r.ok) {
         pushToast('success', `${r.message}${r.commitHash ? ` · ${r.commitHash}` : ''}`);
         setCommitMsg('');
-        await refresh();
+        await refresh(false);
       } else pushToast('error', r.message);
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
@@ -81,6 +108,7 @@ export function GitPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <TaskProgressPanel task={active} onCancel={cancel} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
@@ -90,9 +118,14 @@ export function GitPage() {
             代码账本 — 安全过滤后提交，禁止 .env / 数据库 / 构建产物
           </p>
         </div>
-        <Button variant="secondary" onClick={refresh} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> 刷新
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => refresh(false)} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> 刷新
+          </Button>
+          <Button variant="ghost" onClick={() => refresh(true)} disabled={loading}>
+            检查远端最新
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -121,6 +154,13 @@ export function GitPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {loading && rows.length === 0 && (
+          <>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </>
+        )}
         {rows.map((row) => {
           const st = STATE_LABEL[row.state] || STATE_LABEL.dirty;
           const active = selected?.localPath === row.localPath;
@@ -260,9 +300,17 @@ export function GitPage() {
                 variant="secondary"
                 disabled={busy}
                 onClick={async () => {
-                  const r = await window.zhuboDesktop.git.pull(selected.localPath);
-                  pushToast(r.ok ? 'success' : 'error', r.message);
-                  if (r.ok) refresh();
+                  if (busy) return;
+                  setBusy(true);
+                  try {
+                    const r = (await runTask(() =>
+                      window.zhuboDesktop.git.pull(selected.localPath),
+                    )) as { ok: boolean; message: string };
+                    pushToast(r.ok ? 'success' : 'error', r.message);
+                    if (r.ok) await refresh(false);
+                  } finally {
+                    setBusy(false);
+                  }
                 }}
               >
                 <Download className="h-4 w-4" /> pull 最新

@@ -16,8 +16,15 @@ import {
 
 import { processManager } from './process-manager';
 
-import { scanLocalPorts, isPortListening, checkHealthUrl, inferWebUrl } from './port-manager';
-import { inspectLegacy4791, closeLegacy4791 } from './port-4791';
+import {
+  scanLocalPorts,
+  isPortListening,
+  isPortListeningAsync,
+  checkHealthUrl,
+  inferWebUrl,
+  scanLocalPortsAsync,
+} from './port-manager';
+import { inspectLegacy4791Async, closeLegacy4791 } from './port-4791';
 import { buildQianfanShopCards } from './qianfan-shops';
 
 import {
@@ -45,25 +52,54 @@ import {
   runAgentScanCli,
 } from './manifest-scanner';
 import {
-  listGitStatuses,
   getGitStatusForPath,
   gitCommitAndPush,
   gitPullLatest,
   githubUrlFromRemote,
+  listGitStatusesAsync,
 } from './git-manager';
-import { runHealthCheck, runHealthRepair, runWorkdayStart, runWorkdayEnd } from './health-check';
+import {
+  runHealthCheckLight,
+  runHealthCheckFull,
+  runHealthRepair,
+  runWorkdayStart,
+  runWorkdayEnd,
+} from './health-check';
+import { taskManager } from './task-manager';
+import { wrapIpcHandler } from './ipc-perf';
 import {
   assertAllowedExternalUrl,
   assertAllowedOpenPath,
   assertMoveWindowOptions,
   assertTerminalSession,
+  assertRiskAllowed,
   getWindowHwnd,
   pickSafeProjectPayload,
 } from './ipc-security';
 
 const webViews = new Map<string, BrowserWindow>();
 
+function sendTaskEvent(
+  getMainWindow: () => BrowserWindow | null,
+  channel: string,
+  payload: unknown,
+) {
+  getMainWindow()?.webContents.send(channel, payload);
+}
+
+function assertNotDuplicateTask(type: string) {
+  const running = taskManager
+    .list()
+    .some((t) => t.type === type && (t.status === 'queued' || t.status === 'running'));
+  if (running) throw new Error('这个任务正在进行中，请稍等。');
+}
+
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
+  taskManager.on('progress', (task) => sendTaskEvent(getMainWindow, 'task:progress', task));
+  taskManager.on('done', (task) => sendTaskEvent(getMainWindow, 'task:done', task));
+  taskManager.on('failed', (task) => sendTaskEvent(getMainWindow, 'task:failed', task));
+  taskManager.on('cancelled', (task) => sendTaskEvent(getMainWindow, 'task:cancelled', task));
+
   agentManager.on('status', (snap) => {
     getMainWindow()?.webContents.send('agent:status', snap);
   });
@@ -203,10 +239,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('cloud:ports', async () => {
     await cloudClient.ensureLogin();
 
-    const [ports, local] = await Promise.all([
-      cloudClient.portConflicts(),
-      Promise.resolve(scanLocalPorts()),
-    ]);
+    const [ports, local] = await Promise.all([cloudClient.portConflicts(), scanLocalPortsAsync()]);
 
     return { cloud: ports, local };
   });
@@ -257,16 +290,20 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     if (!project?.id) throw new Error('缺少项目 ID，无法启动');
     try {
       const detail = await cloudClient.project(project.id);
-      return processManager.start(pickSafeProjectPayload(detail as Record<string, unknown>));
+      const payload = pickSafeProjectPayload(detail as Record<string, unknown>);
+      assertRiskAllowed(payload, 'start');
+      return processManager.start(payload);
     } catch (e) {
       fileLog.process(`启动失败: ${e instanceof Error ? e.message : String(e)}`, 'error');
       throw e;
     }
   });
 
-  ipcMain.handle('process:stop', async (_e, projectId: string) => {
-    await processManager.stop(projectId);
-
+  ipcMain.handle('process:stop', async (_e, projectId: string, projectMeta?: any) => {
+    if (projectMeta?.code || projectMeta?.riskLevel) {
+      assertRiskAllowed(projectMeta, 'stop');
+    }
+    await processManager.stop(projectId, projectMeta);
     return { ok: true };
   });
 
@@ -274,7 +311,9 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     if (!project?.id) throw new Error('缺少项目 ID，无法重启');
     try {
       const detail = await cloudClient.project(project.id);
-      return processManager.restart(pickSafeProjectPayload(detail as Record<string, unknown>));
+      const payload = pickSafeProjectPayload(detail as Record<string, unknown>);
+      assertRiskAllowed(payload, 'restart');
+      return processManager.restart(payload);
     } catch (e) {
       throw e;
     }
@@ -293,9 +332,19 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     processManager.resize(projectId, cols, rows);
   });
 
-  ipcMain.handle('ports:local', () => scanLocalPorts());
+  ipcMain.handle('ports:local', () => {
+    assertNotDuplicateTask('ports:local');
+    return taskManager.startTask('ports:local', '扫描本地端口', async ({ signal, progress }) => {
+      progress({ progress: 10, message: '正在扫描端口…' });
+      const ports = await scanLocalPortsAsync(signal);
+      progress({ progress: 100, message: `发现 ${ports.length} 个监听端口` });
+      return ports;
+    });
+  });
 
-  ipcMain.handle('ports:check', (_e, port: number) => isPortListening(port));
+  ipcMain.handle('ports:localSync', () => scanLocalPorts());
+
+  ipcMain.handle('ports:check', async (_e, port: number) => isPortListeningAsync(port));
 
   ipcMain.handle('shell:openPath', (_e, p: string) => {
     return shell.openPath(assertAllowedOpenPath(p));
@@ -445,7 +494,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     return shell.openExternal(assertAllowedExternalUrl(`${base}/secrets`));
   });
 
-  ipcMain.handle('ports:inspect4791', () => inspectLegacy4791());
+  ipcMain.handle('ports:inspect4791', () => inspectLegacy4791Async());
 
   ipcMain.handle('ports:close4791', async () => closeLegacy4791());
 
@@ -530,17 +579,38 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     return app.getAppPath();
   });
 
-  ipcMain.handle('git:list', async () => {
+  ipcMain.handle('git:list', async (_e, opts?: { fetchRemote?: boolean }) => {
+    assertNotDuplicateTask('git:list');
     await cloudClient.ensureLogin();
     const projects = await cloudClient.projects();
-    return listGitStatuses(projects);
+    return taskManager.startTask('git:list', '扫描 Git 状态', async ({ signal, progress }) => {
+      const results = await listGitStatusesAsync(projects, {
+        fetchRemote: !!opts?.fetchRemote,
+        concurrency: 2,
+        signal,
+        onProgress: ({ index, total, status, results: partial }) => {
+          progress({
+            progress: Math.round((index / total) * 100),
+            message: `正在检查 Git ${index}/${total}：${status.projectName}`,
+            partial: { results: partial, latest: status },
+          });
+        },
+      });
+      return results;
+    });
   });
 
   ipcMain.handle(
     'git:status',
-    (
+    async (
       _e,
-      opts: { localPath: string; projectCode: string; projectName: string; gitRemote?: string },
+      opts: {
+        localPath: string;
+        projectCode: string;
+        projectName: string;
+        gitRemote?: string;
+        fetchRemote?: boolean;
+      },
     ) => getGitStatusForPath(opts),
   );
 
@@ -549,20 +619,68 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     async (
       _e,
       opts: { localPath: string; message?: string; paths?: string[]; pushOnly?: boolean },
-    ) => gitCommitAndPush(opts),
+    ) => {
+      assertNotDuplicateTask(`git:commitPush:${opts.localPath}`);
+      return taskManager.startTask(
+        'git:commitPush',
+        'Git 提交并 push',
+        async ({ signal, progress }) => {
+          progress({ progress: 20, message: '正在提交…' });
+          const result = await gitCommitAndPush(opts, signal);
+          progress({ progress: 100, message: result.message });
+          return result;
+        },
+      );
+    },
   );
 
-  ipcMain.handle('git:pull', (_e, localPath: string) => gitPullLatest(localPath));
+  ipcMain.handle('git:pull', async (_e, localPath: string) => {
+    assertNotDuplicateTask(`git:pull:${localPath}`);
+    return taskManager.startTask('git:pull', 'Git pull', async ({ signal, progress }) => {
+      progress({ progress: 30, message: '正在 pull…' });
+      return gitPullLatest(localPath, signal);
+    });
+  });
 
   ipcMain.handle('git:githubUrl', (_e, remote?: string) => githubUrlFromRemote(remote));
 
-  ipcMain.handle('steward:healthCheck', () => runHealthCheck());
+  ipcMain.handle('steward:healthCheckLight', () => runHealthCheckLight());
+
+  ipcMain.handle('steward:healthCheck', () => {
+    assertNotDuplicateTask('steward:healthCheck');
+    return taskManager.startTask(
+      'steward:healthCheck',
+      '系统完整体检',
+      async ({ signal, progress }) =>
+        runHealthCheckFull(
+          (step, pct, msg) => progress({ progress: pct, message: msg || step }),
+          signal,
+        ),
+    );
+  });
 
   ipcMain.handle('steward:repair', (_e, action: string) => runHealthRepair(action));
 
-  ipcMain.handle('steward:workdayStart', () => runWorkdayStart());
+  ipcMain.handle('steward:workdayStart', () => {
+    assertNotDuplicateTask('steward:workdayStart');
+    return taskManager.startTask('steward:workdayStart', '今日开工', async ({ signal, progress }) =>
+      runWorkdayStart(
+        (step, pct, msg) => progress({ progress: pct, message: msg || step }),
+        signal,
+      ),
+    );
+  });
 
-  ipcMain.handle('steward:workdayEnd', () => runWorkdayEnd());
+  ipcMain.handle('steward:workdayEnd', () => {
+    assertNotDuplicateTask('steward:workdayEnd');
+    return taskManager.startTask('steward:workdayEnd', '今日收工', async ({ signal, progress }) =>
+      runWorkdayEnd((step, pct, msg) => progress({ progress: pct, message: msg || step }), signal),
+    );
+  });
+
+  ipcMain.handle('tasks:list', () => taskManager.list());
+  ipcMain.handle('tasks:get', (_e, id: string) => taskManager.get(id));
+  ipcMain.handle('tasks:cancel', (_e, id: string) => taskManager.cancel(id));
 
   ipcMain.handle('steward:backups', async () => {
     await cloudClient.ensureLogin();
