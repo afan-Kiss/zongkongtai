@@ -159,8 +159,7 @@ export function GitPage() {
   const changeCount = (r: GitProjectStatus) =>
     r.addedCount + r.modifiedCount + r.deletedCount + (r.hasUncommitted ? 1 : 0);
   const commitFileCount = (row: GitProjectStatus) => row.safeToCommitPaths?.length ?? 0;
-  const isHighRisk = (row: GitProjectStatus) =>
-    row.riskLevel === 'high' || row.riskLevel === 'protected';
+  const hasBlockedUpload = (row: GitProjectStatus) => row.blockedPaths.length > 0;
 
   return (
     <div className="space-y-6 p-6">
@@ -293,9 +292,9 @@ export function GitPage() {
                 将要提交 {commitFileCount(uploadTarget)} 个文件 · 已拦截{' '}
                 {uploadTarget.blockedPaths.length} 个敏感文件
               </p>
-              {isHighRisk(uploadTarget) && (
+              {hasBlockedUpload(uploadTarget) && (
                 <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-100">
-                  高风险项目，只建议上传源码和 manifest，不上传运行数据。
+                  运行数据、日志和敏感文件不会上传，仅提交源码与配置文件。
                 </p>
               )}
               <textarea

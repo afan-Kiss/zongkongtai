@@ -17,23 +17,16 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { useAppStore } from '@/stores/appStore';
 import type { Project } from '@/types/desktop';
 import {
-  DEFAULT_RISK_BY_CODE,
-  normalizeRiskLevel,
-  riskRequiresConfirm,
-} from '@zhubo/control-shared';
-import {
   formatPortList,
   findDuplicateGroups,
   GIT_UNPUSHED_CACHE_KEY,
   hasDuplicatePortRegistration,
 } from '@/lib/projectDedup';
 
-const RISK_LABEL: Record<string, string> = {
-  low: '低风险',
-  medium: '中风险',
-  high: '高风险',
-  protected: '受保护',
-};
+/** 总控 EXE 自身不在卡片里启停，避免误关本程序 */
+function isSelfControlProject(project: Project) {
+  return project.code === 'zhubo-control';
+}
 
 function statusLabel(status?: string) {
   switch (status) {
@@ -67,11 +60,7 @@ export function ProjectCard({ project }: { project: Project }) {
   const setActiveTerminal = useAppStore((s) => s.setActiveTerminal);
   const selectProject = useAppStore((s) => s.selectProject);
   const status = proc?.status || 'idle';
-  const risk = normalizeRiskLevel(
-    (project as Project & { riskLevel?: string }).riskLevel || DEFAULT_RISK_BY_CODE[project.code],
-  );
-  const riskGate = riskRequiresConfirm(risk);
-  const isProtected = risk === 'protected';
+  const selfControl = isSelfControlProject(project);
   const ports = formatPortList(project.ports, 4);
   const portsDeduped = hasDuplicatePortRegistration(project.ports);
   const isRunning = status === 'running';
@@ -79,16 +68,10 @@ export function ProjectCard({ project }: { project: Project }) {
 
   const start = async () => {
     try {
-      if (riskGate === 'blocked') {
-        pushToast('error', '这个项目是 protected，不能从 EXE 自动启动。');
+      if (selfControl) {
+        pushToast('info', '总控工作台请直接关闭窗口，不要在此卡片启停。');
         return;
       }
-      if (
-        riskGate === 'high' &&
-        !confirm(`高风险项目「${project.name}」\n影响：可能影响线上服务或核心数据\n确定启动？`)
-      )
-        return;
-      if (riskGate === 'medium' && !confirm(`中等风险项目「${project.name}」，确定启动？`)) return;
       if (!project.localPath) throw new Error('无本地路径');
       await window.zhuboDesktop.process.start(project);
       setActiveTerminal(project.id);
@@ -104,23 +87,19 @@ export function ProjectCard({ project }: { project: Project }) {
   };
 
   const stop = async () => {
-    if (isProtected) {
-      pushToast('error', '这个项目是 protected，不能从 EXE 自动停止。');
+    if (selfControl) {
+      pushToast('info', '总控工作台请直接关闭窗口，不要在此卡片启停。');
       return;
     }
-    if (riskGate === 'high' && !confirm(`高风险项目「${project.name}」\n确定停止？`)) return;
-    if (riskGate === 'medium' && !confirm(`中等风险项目「${project.name}」，确定停止？`)) return;
     await window.zhuboDesktop.process.stop(project.id, project);
     pushToast('info', `${project.name} 已停止`);
   };
 
   const restart = async () => {
-    if (isProtected) {
-      pushToast('error', '这个项目是 protected，不能从 EXE 自动重启。');
+    if (selfControl) {
+      pushToast('info', '总控工作台请直接关闭窗口，不要在此卡片启停。');
       return;
     }
-    if (riskGate === 'high' && !confirm(`高风险项目「${project.name}」\n确定重启？`)) return;
-    if (riskGate === 'medium' && !confirm(`中等风险项目「${project.name}」，确定重启？`)) return;
     try {
       await window.zhuboDesktop.process.restart(project);
       pushToast('success', `${project.name} 正在重启`);
@@ -164,15 +143,8 @@ export function ProjectCard({ project }: { project: Project }) {
                 <StatusDot status={status} />
                 {project.name}
               </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{project.category || '未分类'}</span>
-                <Badge
-                  variant={
-                    risk === 'low' ? 'success' : risk === 'protected' ? 'destructive' : 'warning'
-                  }
-                >
-                  {RISK_LABEL[risk] || risk}
-                </Badge>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {project.category || '未分类'}
               </div>
             </div>
             <Badge variant={statusVariant(status)}>{statusLabel(status)}</Badge>
@@ -191,7 +163,7 @@ export function ProjectCard({ project }: { project: Project }) {
             {proc?.pid && <Badge variant="muted">PID {proc.pid}</Badge>}
           </div>
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-            {!isProtected && (
+            {!selfControl && (
               <>
                 <Tooltip content="启动这个项目，并在下方显示终端日志">
                   <Button
@@ -202,44 +174,21 @@ export function ProjectCard({ project }: { project: Project }) {
                     <Play className="h-3 w-3" /> 启动
                   </Button>
                 </Tooltip>
-                {risk !== 'high' && (
-                  <>
-                    <Tooltip content="停止由总控启动的进程">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={stop}
-                        disabled={status !== 'running'}
-                      >
-                        <Square className="h-3 w-3" /> 停止
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="先停止再重新启动">
-                      <Button size="sm" variant="ghost" onClick={restart}>
-                        <RotateCcw className="h-3 w-3" />
-                      </Button>
-                    </Tooltip>
-                  </>
-                )}
-                {risk === 'high' && (
-                  <>
-                    <Tooltip content="高风险：停止需强确认">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={stop}
-                        disabled={status !== 'running'}
-                      >
-                        <Square className="h-3 w-3" /> 停止
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="高风险：重启需强确认">
-                      <Button size="sm" variant="ghost" onClick={restart}>
-                        <RotateCcw className="h-3 w-3" />
-                      </Button>
-                    </Tooltip>
-                  </>
-                )}
+                <Tooltip content="停止由总控启动的进程">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={stop}
+                    disabled={status !== 'running'}
+                  >
+                    <Square className="h-3 w-3" /> 停止
+                  </Button>
+                </Tooltip>
+                <Tooltip content="先停止再重新启动">
+                  <Button size="sm" variant="ghost" onClick={restart}>
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
+                </Tooltip>
               </>
             )}
             <Tooltip content="在总控里打开项目页面">

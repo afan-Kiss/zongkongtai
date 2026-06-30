@@ -107,18 +107,18 @@ const mainNavIds = shell.match(/id:\s*'[^']+'/g) || [];
 if (mainNavIds.length !== 8) {
   failures.push(`Shell MAIN_NAV must have exactly 8 items, found ${mainNavIds.length}`);
 }
-const bootstrap = read(path.join(SRC, 'hooks/useCloudBootstrap.ts'));
-if (!bootstrap.includes('deduplicateProjects')) {
-  failures.push('useCloudBootstrap must deduplicateProjects before setProjects');
+const bootstrap = read(path.join(SRC, 'hooks/useLocalBootstrap.ts'));
+if (!bootstrap.includes('projects.loadLocal')) {
+  failures.push('useLocalBootstrap must load local projects on start');
 }
 
-// 8. ProjectCard protected hides start/stop/restart
+// 8. ProjectCard — 总控自身不在卡片里启停
 const card = read(path.join(SRC, 'components/ProjectCard.tsx'));
-if (!card.includes('riskRequiresConfirm') || !card.includes('protected')) {
-  failures.push('ProjectCard missing riskLevel gates');
+if (!card.includes('zhubo-control') || !card.includes('isSelfControlProject')) {
+  failures.push('ProjectCard must guard self-control project start/stop');
 }
-if (!card.includes('{!isProtected && (')) {
-  failures.push('ProjectCard protected must hide start/stop/restart buttons');
+if (card.includes('低风险') || card.includes('中风险') || card.includes('高风险')) {
+  failures.push('ProjectCard must not show risk level badges');
 }
 
 // 9. HealthPage — manual start, no auto loadLight

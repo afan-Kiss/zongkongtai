@@ -7,7 +7,6 @@ import { readProjectManifest } from './manifest-scanner';
 import {
   normalizeRiskLevel,
   DEFAULT_RISK_BY_CODE,
-  riskRequiresConfirm,
   type RiskLevel,
 } from '../../../packages/control-shared/src/steward';
 
@@ -140,11 +139,7 @@ export function assertRiskAllowed(
   project: { code?: string; name?: string; riskLevel?: RiskLevel | string },
   action: 'start' | 'stop' | 'restart',
 ): void {
-  const risk = normalizeRiskLevel(
-    project.riskLevel || (project.code ? DEFAULT_RISK_BY_CODE[project.code] : undefined),
-  );
-  const gate = riskRequiresConfirm(risk);
-  if (gate === 'blocked') {
-    throw new Error(`这个项目是 protected，不能从 EXE 自动${RISK_ACTION_MSG[action]}。`);
+  if (project.code === 'zhubo-control') {
+    throw new Error(`总控工作台请直接关闭窗口，不要在此${RISK_ACTION_MSG[action]}。`);
   }
 }
