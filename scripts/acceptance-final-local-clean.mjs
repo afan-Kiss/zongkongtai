@@ -50,14 +50,43 @@ if (/cloudClient\.project/.test(ipc)) {
   failures.push('process handlers must not call cloudClient.project');
 }
 
-if (ipc.includes('cloud:')) failures.push('ipc.ts must not register cloud: handlers');
-if (ipc.includes('agent:')) failures.push('ipc.ts must not register agent: handlers');
-if (ipc.includes('workspace:')) failures.push('ipc.ts must not register workspace: handlers');
+if (ipc.includes("ipcMain.handle('cloud:") || ipc.includes('ipcMain.handle("cloud:')) {
+  failures.push('ipc.ts must not register cloud: handlers');
+}
+if (ipc.includes("ipcMain.handle('agent:") || ipc.includes('ipcMain.handle("agent:')) {
+  failures.push('ipc.ts must not register agent: handlers');
+}
+if (ipc.includes("ipcMain.handle('workspace:") || ipc.includes('ipcMain.handle("workspace:')) {
+  failures.push('ipc.ts must not register workspace: handlers');
+}
+for (const ch of [
+  'steward:backups',
+  'steward:deployments',
+  'steward:tasks',
+  'steward:workdayStart',
+  'steward:workdayEnd',
+  'steward:createBackup',
+  'steward:restoreBackup',
+]) {
+  if (ipc.includes(ch)) failures.push(`ipc.ts must not register ${ch}`);
+}
+if (ipc.includes('REMOVED_FEATURE') || ipc.includes('该功能已移除')) {
+  failures.push('ipc.ts must not use REMOVED_FEATURE stubs');
+}
 
-if (preload.includes('cloud:')) failures.push('preload must not expose cloud API');
+if (preload.includes('cloud:') || preload.includes('cloud.')) {
+  failures.push('preload must not expose cloud API');
+}
 if (preload.includes('secrets')) failures.push('preload must not expose secrets');
-if (preload.includes('agent:')) failures.push('preload must not expose agent API');
-if (preload.includes('workspace:')) failures.push('preload must not expose workspace API');
+if (preload.includes('agent:') || preload.includes('agent.')) {
+  failures.push('preload must not expose agent API');
+}
+if (preload.includes('workspace:') || preload.includes('workspace.')) {
+  failures.push('preload must not expose workspace API');
+}
+if (preload.includes('cookie:') || preload.includes('cookie.')) {
+  failures.push('preload must not expose cookie API');
+}
 if (preload.includes('backups')) failures.push('preload must not expose backups');
 if (preload.includes('deployments')) failures.push('preload must not expose deployments');
 
@@ -72,14 +101,19 @@ for (const key of [
 }
 
 if (overview.includes('git.list')) failures.push('OverviewPage must not auto git.list');
-if (bootstrap.includes('30000')) failures.push('useLocalBootstrap must not use 30s interval for full refresh');
+if (bootstrap.includes('30000'))
+  failures.push('useLocalBootstrap must not use 30s interval for full refresh');
 if (bootstrap.includes('loadLocal') && /setInterval[\s\S]{0,200}loadLocal/.test(bootstrap)) {
   failures.push('useLocalBootstrap must not periodically loadLocal');
 }
-if (bootstrap.includes('ports.analyze') && /setInterval[\s\S]{0,300}ports\.analyze/.test(bootstrap)) {
+if (
+  bootstrap.includes('ports.analyze') &&
+  /setInterval[\s\S]{0,300}ports\.analyze/.test(bootstrap)
+) {
   failures.push('useLocalBootstrap must not periodically ports.analyze');
 }
-if (!bootstrap.includes('60000')) failures.push('useLocalBootstrap should poll external-running every 60s');
+if (!bootstrap.includes('60000'))
+  failures.push('useLocalBootstrap should poll external-running every 60s');
 if (/portConflictIgnoredIds/.test(bootstrap)) {
   failures.push('useLocalBootstrap must not depend on portConflictIgnoredIds');
 }
@@ -105,7 +139,11 @@ for (const key of [
   if (appStore.includes(key)) failures.push(`appStore must not contain ${key}`);
 }
 
-if (settings.includes('管理员账号') || settings.includes('管理员密码') || settings.includes('Token')) {
+if (
+  settings.includes('管理员账号') ||
+  settings.includes('管理员密码') ||
+  settings.includes('Token')
+) {
   failures.push('Settings must not have account/password/token fields');
 }
 if (fs.existsSync(path.join(SRC, 'pages/CookiesPage.tsx'))) {
@@ -118,17 +156,35 @@ const coreFiles = [
   'apps/control-desktop/electron/preload.ts',
   'apps/control-desktop/electron/config.ts',
   'apps/control-desktop/electron/start-command.ts',
-  'apps/control-desktop/electron/external-project-status.ts',
-  'apps/control-desktop/electron/external-process-stop.ts',
   'apps/control-desktop/src/stores/appStore.ts',
+  'apps/control-desktop/src/components/layout/Shell.tsx',
   'apps/control-desktop/src/hooks/useLocalBootstrap.ts',
   'package.json',
+  'README.md',
 ];
+const minLines = {
+  'apps/control-desktop/electron/ipc.ts': 100,
+  'apps/control-desktop/electron/preload.ts': 50,
+  'apps/control-desktop/electron/config.ts': 30,
+  'apps/control-desktop/src/stores/appStore.ts': 40,
+  'apps/control-desktop/src/components/layout/Shell.tsx': 40,
+  'package.json': 8,
+  'README.md': 15,
+};
 for (const rel of coreFiles) {
   const content = read(rel);
-  if (content.split('\n').length <= 1 && content.length > 80) {
+  const lines = content.split('\n');
+  if (lines.length <= 1 && content.length > 80) {
     failures.push(`${rel} must not be single-line`);
   }
+  const min = minLines[rel];
+  if (min && lines.length < min && content.length > 80) {
+    failures.push(`${rel} must have at least ${min} lines (got ${lines.length})`);
+  }
+  if (content.length > 80 && !content.includes('\n')) {
+    failures.push(`${rel} must contain LF newlines`);
+  }
+  if (!content.endsWith('\n')) failures.push(`${rel} must end with trailing newline`);
 }
 
 const stopMod = readAbs(path.join(ELECTRON, 'external-process-stop.ts'));

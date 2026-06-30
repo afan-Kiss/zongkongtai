@@ -72,7 +72,11 @@ if (preload.includes('cookie:') || preload.includes('cookie: {')) {
 }
 
 const ipc = read(path.join(ELECTRON, 'ipc.ts'));
-if (ipc.includes('cookie:') || ipc.includes('local-cookie-store') || ipc.includes('local-control-api')) {
+if (
+  ipc.includes('cookie:') ||
+  ipc.includes('local-cookie-store') ||
+  ipc.includes('local-control-api')
+) {
   failures.push('ipc must not register cookie handlers or local cookie API');
 }
 if (ipc.includes('startLocalControlApi')) failures.push('ipc must not start local cookie API');

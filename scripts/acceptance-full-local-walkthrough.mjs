@@ -108,13 +108,37 @@ if (!bootstrap.includes('60000')) failures.push('useLocalBootstrap should poll e
 if (/cloudClient/.test(procMgr)) failures.push('process-manager must not use cloudClient');
 
 // 12 ipc/preload 不暴露 cloud / agent / workspace / backups / deployments
-for (const [name, content] of [
-  ['preload', preload],
-  ['ipc', ipc],
+if (ipc.includes("ipcMain.handle('cloud:") || ipc.includes('ipcMain.handle("cloud:')) {
+  failures.push('ipc must not register cloud: handlers');
+}
+if (ipc.includes("ipcMain.handle('agent:") || ipc.includes('ipcMain.handle("agent:')) {
+  failures.push('ipc must not register agent: handlers');
+}
+if (ipc.includes("ipcMain.handle('workspace:") || ipc.includes('ipcMain.handle("workspace:')) {
+  failures.push('ipc must not register workspace: handlers');
+}
+for (const ch of [
+  'steward:backups',
+  'steward:deployments',
+  'steward:tasks',
+  'steward:workdayStart',
 ]) {
-  if (/cloud:/.test(content)) failures.push(`${name} must not expose cloud IPC channels`);
-  if (/agent:/.test(content)) failures.push(`${name} must not expose agent IPC channels`);
-  if (/workspace:/.test(content)) failures.push(`${name} must not expose workspace IPC channels`);
+  if (ipc.includes(ch)) failures.push(`ipc must not register ${ch}`);
+}
+if (ipc.includes('REMOVED_FEATURE') || ipc.includes('该功能已移除')) {
+  failures.push('ipc must not use REMOVED_FEATURE stubs');
+}
+if (preload.includes('cloud:') || preload.includes('cloud.')) {
+  failures.push('preload must not expose cloud API');
+}
+if (preload.includes('agent:') || preload.includes('agent.')) {
+  failures.push('preload must not expose agent API');
+}
+if (preload.includes('workspace:') || preload.includes('workspace.')) {
+  failures.push('preload must not expose workspace API');
+}
+if (preload.includes('cookie:') || preload.includes('cookie.')) {
+  failures.push('preload must not expose cookie API');
 }
 if (preload.includes('backups') || preload.includes('deployments')) {
   failures.push('preload must not expose backups/deployments');
@@ -165,16 +189,17 @@ if (!startCmd.includes('resolveManifestStartCommand')) {
   failures.push('start-command must use manifest only');
 }
 
-// 19–21 核心源码多行
+// 19–21 核心源码多行（GitHub raw 不能 Total lines: 1）
 const MIN_LINES = {
-  'apps/control-desktop/electron/ipc.ts': 80,
-  'apps/control-desktop/electron/preload.ts': 40,
+  'apps/control-desktop/electron/ipc.ts': 100,
+  'apps/control-desktop/electron/preload.ts': 50,
   'apps/control-desktop/electron/config.ts': 30,
-  'apps/control-desktop/src/App.tsx': 30,
+  'apps/control-desktop/src/App.tsx': 40,
   'apps/control-desktop/src/components/layout/Shell.tsx': 40,
   'apps/control-desktop/src/stores/appStore.ts': 40,
-  'package.json': 5,
-  'README.md': 10,
+  'apps/control-desktop/src/pages/ProjectsPage.tsx': 30,
+  'package.json': 8,
+  'README.md': 15,
 };
 for (const [rel, min] of Object.entries(MIN_LINES)) {
   const content = read(rel);
@@ -185,6 +210,10 @@ for (const [rel, min] of Object.entries(MIN_LINES)) {
   if (lines.length <= 1 && content.length > 80) {
     failures.push(`${rel} must not be single-line`);
   }
+  if (content.length > 80 && !content.includes('\n')) {
+    failures.push(`${rel} must contain LF newlines`);
+  }
+  if (!content.endsWith('\n')) failures.push(`${rel} must end with trailing newline`);
 }
 
 // 22 build/pack 产物不进 Git
@@ -193,7 +222,8 @@ for (const needle of ['dist-desktop', 'win-unpacked', 'node_modules']) {
 }
 
 // 旧路由回退总览
-if (!appTsx.includes('OverviewPage')) failures.push('App must fallback unknown routes to OverviewPage');
+if (!appTsx.includes('OverviewPage'))
+  failures.push('App must fallback unknown routes to OverviewPage');
 if (!/LEGACY_FALLBACK|cookies.*OverviewPage|backup.*OverviewPage/.test(appTsx)) {
   failures.push('App must map legacy routes to OverviewPage');
 }
@@ -212,6 +242,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(
-  JSON.stringify({ ok: true, checks: 22, navItems: navCount }, null, 2),
-);
+console.log(JSON.stringify({ ok: true, checks: 22, navItems: navCount }, null, 2));

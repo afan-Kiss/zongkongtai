@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** 核心源码格式验收 — 多行、LF、行宽、关键安全逻辑 */
+/** 核心源码格式验收 — 多行、LF、行宽、GitHub raw 不能 Total lines: 1 */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,7 +24,9 @@ const CORE_FILES = [
   'apps/control-desktop/src/stores/appStore.ts',
   'apps/control-desktop/src/hooks/useLocalBootstrap.ts',
   'apps/control-desktop/src/lib/localRefresh.ts',
+  'apps/control-desktop/src/App.tsx',
   'apps/control-desktop/src/pages/OverviewPage.tsx',
+  'apps/control-desktop/src/pages/ProjectsPage.tsx',
   'apps/control-desktop/src/pages/SettingsPage.tsx',
   'apps/control-desktop/src/pages/HealthPage.tsx',
   'apps/control-desktop/src/pages/GitPage.tsx',
@@ -32,33 +34,54 @@ const CORE_FILES = [
   'apps/control-desktop/src/components/layout/Shell.tsx',
   'apps/control-desktop/src/components/PortConflictDialog.tsx',
   'apps/control-desktop/native-helper/Zhubo.NativeHelper/Program.cs',
-  'scripts/acceptance-final-local-clean.mjs',
-  'scripts/acceptance-port-conflicts.mjs',
-  'scripts/acceptance-source-format.mjs',
-  'scripts/acceptance-external-running.mjs',
-  'scripts/acceptance-external-stop.mjs',
-  'scripts/acceptance-start-command.mjs',
-  'scripts/acceptance-overview-no-auto-git.mjs',
-  'scripts/acceptance-minimal-local.mjs',
-  'scripts/acceptance-full-local-walkthrough.mjs',
   '.gitattributes',
   '.gitignore',
   'package.json',
   'README.md',
 ];
+for (const f of fs.readdirSync(path.join(ROOT, 'scripts'))) {
+  if (f.startsWith('acceptance-') && f.endsWith('.mjs')) {
+    CORE_FILES.push(`scripts/${f}`);
+  }
+}
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
 
+function assertMultiline(rel, content, minLines) {
+  const issues = [];
+  const lines = content.split('\n');
+  if (content.length > 80 && !content.includes('\n')) {
+    issues.push('must contain LF newlines');
+  }
+  if (lines.length <= 1 && content.length > 80) {
+    issues.push('must not be a single-line file');
+  }
+  if (minLines && lines.length < minLines && content.length > 80) {
+    issues.push(`must have at least ${minLines} lines (got ${lines.length})`);
+  }
+  if (!content.endsWith('\n')) issues.push('must end with trailing newline');
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].length > 2000) {
+      issues.push(`line ${i + 1} exceeds 2000 characters`);
+    }
+  }
+  if (content.includes('\r\n') || (content.includes('\r') && !content.includes('\n'))) {
+    issues.push('must use LF line endings');
+  }
+  return issues;
+}
+
 const MIN_LINE_COUNTS = {
   'apps/control-desktop/electron/ipc.ts': 100,
   'apps/control-desktop/electron/preload.ts': 50,
+  'apps/control-desktop/electron/config.ts': 30,
   'apps/control-desktop/src/App.tsx': 40,
   'apps/control-desktop/src/components/layout/Shell.tsx': 40,
   'apps/control-desktop/src/stores/appStore.ts': 40,
-  'apps/control-desktop/electron/config.ts': 30,
   'apps/control-desktop/src/hooks/useLocalBootstrap.ts': 15,
+  'apps/control-desktop/src/pages/ProjectsPage.tsx': 30,
   'package.json': 8,
   'README.md': 15,
 };
@@ -72,25 +95,8 @@ for (const rel of CORE_FILES) {
     continue;
   }
   const content = read(abs);
-  const lines = content.split('\n');
-
-  if (lines.length <= 1 && content.length > 80) {
-    failures.push(`${rel} must not be a single-line file`);
-  }
-
-  const minLines = MIN_LINE_COUNTS[rel];
-  if (minLines && lines.length < minLines && content.length > 80) {
-    failures.push(`${rel} must have at least ${minLines} lines (got ${lines.length})`);
-  }
-
-  if (content.includes('\r\n') || (content.includes('\r') && !content.includes('\n'))) {
-    failures.push(`${rel} must use LF line endings`);
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].length > 2000) {
-      failures.push(`${rel} line ${i + 1} exceeds 2000 characters`);
-    }
+  for (const issue of assertMultiline(rel, content, MIN_LINE_COUNTS[rel])) {
+    failures.push(`${rel} ${issue}`);
   }
 }
 
@@ -99,9 +105,7 @@ const programCs = read(
 );
 const hasMoveWindowEntry =
   programCs.includes('EntryPoint = "MoveWindow"') ||
-  /DllImport\("user32\.dll"[^)]*\)\s*\n\s*private static extern bool MoveWindow\(/.test(
-    programCs,
-  );
+  /DllImport\("user32\.dll"[^)]*\)\s*\n\s*private static extern bool MoveWindow\(/.test(programCs);
 if (!hasMoveWindowEntry) {
   failures.push('Program.cs must DllImport user32 MoveWindow via EntryPoint or method name');
 }
@@ -130,4 +134,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, files: CORE_FILES.length, checks: 8 }, null, 2));
+console.log(JSON.stringify({ ok: true, files: CORE_FILES.length, checks: 10 }, null, 2));

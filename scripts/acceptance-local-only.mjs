@@ -58,7 +58,8 @@ if (!readme.includes('珠宝本地总控')) failures.push('README must describe 
 if (!readme.includes('千帆中转机器人')) failures.push('README must mention qianfan bot for Cookie');
 
 const bootstrap = read(path.join(SRC, 'hooks/useLocalBootstrap.ts'));
-if (!bootstrap.includes('projects.loadLocal')) failures.push('useLocalBootstrap must load local projects');
+if (!bootstrap.includes('projects.loadLocal'))
+  failures.push('useLocalBootstrap must load local projects');
 
 if (failures.length) {
   console.error('FAIL local-only acceptance:');

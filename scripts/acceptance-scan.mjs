@@ -5,7 +5,15 @@ import path from 'path';
 
 const ROOT = process.env.SCAN_ROOT || 'E:\\我的软件源码';
 const MANIFEST = 'zhubo-control.manifest.json';
-const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'dist-desktop', 'win-unpacked']);
+const SKIP = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  'dist-desktop',
+  'win-unpacked',
+]);
 
 async function checkHealth(url, timeoutMs = 4000) {
   if (!url) return { ok: false, skip: true, message: '无 health 地址' };
@@ -67,7 +75,10 @@ async function main() {
       continue;
     }
     const healthUrl = manifest.localHealthUrl || manifest.healthUrl;
-    const health = manifest.healthType === 'process' ? { ok: false, skip: true, message: '进程检测' } : await checkHealth(healthUrl);
+    const health =
+      manifest.healthType === 'process'
+        ? { ok: false, skip: true, message: '进程检测' }
+        : await checkHealth(healthUrl);
     const forbidden = JSON.stringify(manifest).match(/xiangyuzhubao\.xyz|wss:\/\//i);
     report.push({
       name: manifest.name,
@@ -88,7 +99,13 @@ async function main() {
       pathExists: fs.existsSync(manifest.localPath || dir),
     });
   }
-  console.log(JSON.stringify({ scannedAt: new Date().toISOString(), count: report.length, items: report }, null, 2));
+  console.log(
+    JSON.stringify(
+      { scannedAt: new Date().toISOString(), count: report.length, items: report },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((e) => {

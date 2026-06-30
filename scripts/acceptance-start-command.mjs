@@ -29,9 +29,7 @@ if (!startCmd.includes('isStaleProjectPath')) {
 if (!startCmd.includes('wxbot-new-oneclick')) {
   failures.push('qianfan must support wxbot-new-oneclick.js entry');
 }
-const desktopStartMatch = desktop.match(
-  /export function resolveDesktopStartCommand[\s\S]*?^}/m,
-);
+const desktopStartMatch = desktop.match(/export function resolveDesktopStartCommand[\s\S]*?^}/m);
 if (desktopStartMatch && desktopStartMatch[0].includes('lookupEntry')) {
   failures.push('resolveDesktopStartCommand must not fallback to lookupEntry defaults');
 }

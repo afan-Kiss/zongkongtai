@@ -30,7 +30,10 @@ async function api(pathname, opts = {}) {
   });
   const raw = res.headers.get('set-cookie');
   if (raw) {
-    cookie = raw.split(',').map((s) => s.split(';')[0].trim()).join('; ');
+    cookie = raw
+      .split(',')
+      .map((s) => s.split(';')[0].trim())
+      .join('; ');
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `${res.status} ${pathname}`);
@@ -93,13 +96,24 @@ async function main() {
     unknownPorts: unknownPorts.map((p) => ({ port: p.port, purpose: p.purpose })),
     secretsCheck: {
       count: secrets.length,
-      allMasked: secrets.every((s) => !s.encryptedValue && (secrets.length === 0 || String(s.valuePreview || '').includes('*') || s.valuePreview?.length < 20)),
-      noPlaintextField: secrets.every((s) => s.encryptedValue === undefined || s.encryptedValue === null),
+      allMasked: secrets.every(
+        (s) =>
+          !s.encryptedValue &&
+          (secrets.length === 0 ||
+            String(s.valuePreview || '').includes('*') ||
+            s.valuePreview?.length < 20),
+      ),
+      noPlaintextField: secrets.every(
+        (s) => s.encryptedValue === undefined || s.encryptedValue === null,
+      ),
     },
     recentOps: ops.slice(0, 8),
   };
 
-  fs.writeFileSync(path.join(root, 'scripts/acceptance-report.json'), JSON.stringify(report, null, 2));
+  fs.writeFileSync(
+    path.join(root, 'scripts/acceptance-report.json'),
+    JSON.stringify(report, null, 2),
+  );
   console.log(JSON.stringify(report, null, 2));
 }
 

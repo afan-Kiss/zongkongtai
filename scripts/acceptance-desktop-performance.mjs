@@ -57,7 +57,8 @@ for (const needle of ["startTask('git:list'", "'steward:healthCheck'"]) {
 
 // 5. ports async + preflight single scan
 const portMgr = read(path.join(ELECTRON, 'port-manager.ts'));
-if (!portMgr.includes('scanLocalPortsAsync')) failures.push('port-manager missing scanLocalPortsAsync');
+if (!portMgr.includes('scanLocalPortsAsync'))
+  failures.push('port-manager missing scanLocalPortsAsync');
 
 const procMgr = read(path.join(ELECTRON, 'process-manager.ts'));
 const preflightEarly = procMgr.slice(
@@ -130,7 +131,11 @@ const healthPage = read(path.join(SRC, 'pages/HealthPage.tsx'));
 if (!healthPage.includes('开始简单体检') || !healthPage.includes('简单体检')) {
   failures.push('HealthPage must be simple health with manual start button');
 }
-if (healthPage.includes('系统体检') || healthPage.includes('完整体检') || healthPage.includes('轻量检查')) {
+if (
+  healthPage.includes('系统体检') ||
+  healthPage.includes('完整体检') ||
+  healthPage.includes('轻量检查')
+) {
   failures.push('HealthPage must not use complex health labels');
 }
 if (/useEffect\(\(\) => \{\s*loadLight/.test(healthPage)) {
@@ -209,14 +214,20 @@ if (!ipc.includes("assertRiskAllowed(payload, 'stop')")) {
 
 // 13. useTaskRunner resolves all waiters (concurrent tasks)
 const taskRunner = read(path.join(SRC, 'hooks/useTaskRunner.ts'));
-if (taskRunner.includes('if (!isCurrent(t)) return') && taskRunner.includes('waiters.current.get')) {
+if (
+  taskRunner.includes('if (!isCurrent(t)) return') &&
+  taskRunner.includes('waiters.current.get')
+) {
   if (!taskRunner.includes('finishWaiter')) {
     failures.push('useTaskRunner must resolve waiters without blocking on activeId only');
   }
 }
 
 // 16. git:list no default --ignored
-if (gitMgr.includes("['status', '--porcelain', '--ignored']") && gitMgr.includes('getGitStatusForPath')) {
+if (
+  gitMgr.includes("['status', '--porcelain', '--ignored']") &&
+  gitMgr.includes('getGitStatusForPath')
+) {
   const statusFn = gitMgr.slice(
     gitMgr.indexOf('export async function getGitStatusForPath'),
     gitMgr.indexOf('export async function countGitIgnoredFiles'),

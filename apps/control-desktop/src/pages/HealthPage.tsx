@@ -190,13 +190,12 @@ export function HealthPage() {
                     <div className="text-xs text-muted-foreground">{item.message}</div>
                   </div>
                   {(item.repairAction?.startsWith('nav:') ||
-                    item.repairAction === 'dialog:portConflicts' ||
-                    item.repairAction === 'agent:ensure' ||
-                    item.status !== 'ok') && (
-                    <Button size="sm" variant="secondary" onClick={() => goFix(item)}>
-                      去处理 <ChevronRight className="h-3 w-3" />
-                    </Button>
-                  )}
+                    item.repairAction === 'dialog:portConflicts') &&
+                    item.repairable && (
+                      <Button size="sm" variant="secondary" onClick={() => goFix(item)}>
+                        去处理 <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    )}
                 </motion.div>
               ))}
             </div>

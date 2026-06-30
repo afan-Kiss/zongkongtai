@@ -45,8 +45,8 @@ export async function checkCloudHealth(signal?: AbortSignal): Promise<HealthChec
     id: 'cloud_health',
     title: '云端总控',
     status: 'skipped',
-    message: '已移除云端功能，总控为纯本地工具。',
-    category: 'cloud',
+    message: '本地模式，不检查云端。',
+    category: 'config',
   });
 }
 
@@ -355,8 +355,8 @@ export async function checkCloudOptional(): Promise<HealthCheckItem> {
     id: 'cloud',
     title: '云端连接',
     status: 'skipped',
-    message: '已移除云端功能',
-    category: 'cloud',
+    message: '本地模式，不检查云端。',
+    category: 'config',
   });
 }
 
@@ -365,8 +365,8 @@ export function checkAgentSimple(): HealthCheckItem {
     id: 'agent_online',
     title: '本地 Agent',
     status: 'skipped',
-    message: '已移除 Agent 云端功能',
-    category: 'agent',
+    message: '本地模式，不检查 Agent。',
+    category: 'config',
   });
 }
 
@@ -390,8 +390,6 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
 
 export async function runHealthRepair(action: string): Promise<{ ok: boolean; message: string }> {
   switch (action) {
-    case 'agent:ensure':
-      return { ok: false, message: '该功能已移除，总控现在是纯本地工具。' };
     case 'ports:close4791':
       return closeLegacy4791();
     default:

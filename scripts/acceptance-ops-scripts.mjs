@@ -66,7 +66,13 @@ function checkNewlines(files, failures) {
       failures.push(`${r}: shebang 与代码挤在同一行`);
     }
 
-    if (lines[0]?.startsWith('#!') && lineCount > 1 && lines[1]?.trim() && !lines[1].startsWith('"""') && !lines[1].startsWith('#')) {
+    if (
+      lines[0]?.startsWith('#!') &&
+      lineCount > 1 &&
+      lines[1]?.trim() &&
+      !lines[1].startsWith('"""') &&
+      !lines[1].startsWith('#')
+    ) {
       const second = lines[1].trim();
       if (second.startsWith('import ') || second.startsWith('from ')) {
         /* ok */
@@ -91,7 +97,9 @@ function pyCompile(files, failures) {
       cwd: ROOT,
     });
     if (res.status !== 0) {
-      failures.push(`${r}: py_compile 失败 — ${(res.stderr || res.stdout || '').trim().slice(0, 200)}`);
+      failures.push(
+        `${r}: py_compile 失败 — ${(res.stderr || res.stdout || '').trim().slice(0, 200)}`,
+      );
     }
   }
 }
