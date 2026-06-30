@@ -24,8 +24,6 @@ interface AppState {
   terminalFullscreen: boolean;
   activeTerminalId: string | null;
   toasts: ToastItem[];
-  qianfanCookieUpdatedAt: string | null;
-  qianfanCookieHash: string | null;
   showDuplicateProjects: boolean;
   setCloud: (ok: boolean, msg: string, extra?: Partial<AppState>) => void;
   setAgentStatus: (s: AgentStatus | null) => void;
@@ -37,7 +35,6 @@ interface AppState {
   setActiveTerminal: (id: string | null) => void;
   pushToast: (type: ToastItem['type'], message: string) => void;
   removeToast: (id: string) => void;
-  setQianfanCookie: (updatedAt: string | null, hash: string | null) => void;
   setShowDuplicateProjects: (v: boolean) => void;
   setPortConflictAnalysis: (a: PortConflictAnalysis | null) => void;
   setPortConflictOpen: (v: boolean) => void;
@@ -65,8 +62,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   terminalFullscreen: false,
   activeTerminalId: null,
   toasts: [],
-  qianfanCookieUpdatedAt: null,
-  qianfanCookieHash: null,
   showDuplicateProjects: false,
   setCloud: (ok, msg, extra) => set({ cloudConnected: ok, cloudMessage: msg, ...extra }),
   setAgentStatus: (agentStatus) =>
@@ -94,8 +89,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     setTimeout(() => get().removeToast(id), 4500);
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-  setQianfanCookie: (updatedAt, hash) =>
-    set({ qianfanCookieUpdatedAt: updatedAt, qianfanCookieHash: hash }),
   setShowDuplicateProjects: (showDuplicateProjects) => set({ showDuplicateProjects }),
   setPortConflictAnalysis: (portConflictAnalysis) =>
     set({

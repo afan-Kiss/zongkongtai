@@ -30,8 +30,6 @@ import {
   previewManifestPortDedupe,
   applyManifestPortDedupe,
 } from './port-conflict-analyzer';
-import { buildQianfanShopCards } from './qianfan-shops';
-
 import {
   listWindows,
   findWindowsByProcess,
@@ -75,17 +73,6 @@ import {
   runWorkdayEnd,
 } from './health-check';
 import { taskManager } from './task-manager';
-import {
-  syncCookieViaRelay,
-  testQianfanRelay,
-  pasteUploadCookie,
-  startQianfanRelay,
-  fetchRelayAutoStatus,
-  qianfanShopsForDesktop,
-  localCookieSummary,
-} from './cookie-sync';
-import { clearLocalCookieStore, getLocalCookieStorePath } from './local-cookie-store';
-import { startLocalControlApi } from './local-control-api';
 import { wrapIpcHandler } from './ipc-perf';
 import {
   assertAllowedExternalUrl,
@@ -156,8 +143,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
   agentManager.startPolling(20000);
 
-  void startLocalControlApi();
-
   processManager.on('log', ({ projectId, data }) => {
     getMainWindow()?.webContents.send('terminal:data', { projectId, data });
   });
@@ -171,12 +156,9 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
     return {
       scanRoot: cfg.scanRoot,
-      qianfanRelayUrl: cfg.qianfanRelayUrl,
-      localControlApiPort: cfg.localControlApiPort || 4793,
       configDir: getConfigDir(),
       configFilePath: getConfigFilePath(),
       logDir: getLogDir(),
-      cookieStorePath: getLocalCookieStorePath(),
       configComplete: isConfigComplete(cfg),
       autoStart: isAutoLaunchEnabled(),
     };
@@ -186,18 +168,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     const current = loadConfig();
     const next = { ...current };
     if (partial.scanRoot) next.scanRoot = String(partial.scanRoot);
-    if (partial.qianfanRelayUrl) next.qianfanRelayUrl = String(partial.qianfanRelayUrl);
-    if (partial.localControlApiPort != null) {
-      next.localControlApiPort = Number(partial.localControlApiPort) || 4793;
-    }
     saveConfig(next);
     fileLog.app('本地配置已保存');
     return { ok: true };
   });
 
   ipcMain.handle('config:resetLocalCache', () => {
-    clearLocalCookieStore();
-    return { ok: true, message: '已清空本地 Cookie 缓存' };
+    return { ok: true, message: '本地缓存已重置，请重新扫描项目' };
   });
 
   ipcMain.handle('config:testLogin', async () => ({ ok: true, message: '本地模式无需登录' }));
@@ -216,13 +193,11 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('cloud:connect', async () => {
     const local = loadLocalProjectsFromManifests();
-    const summary = localCookieSummary();
     return {
       ok: true,
       message: '本地模式',
       agentsOnline: 0,
       localProjectCount: local.length,
-      cookieFound: summary.foundCount,
     };
   });
 
@@ -488,40 +463,12 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
     logDir: getLogDir(),
 
-    localControlApiUrl: `http://127.0.0.1:${loadConfig().localControlApiPort || 4793}`,
-
     nativeHelper: getHelperStatus(),
 
     isPackaged: app.isPackaged,
 
     userData: app.getPath('userData'),
   }));
-
-  ipcMain.handle('cloud:qianfanShops', async (_e, opts?: { includeArchived?: boolean }) =>
-    qianfanShopsForDesktop(!!opts?.includeArchived),
-  );
-
-  ipcMain.handle('cookie:localShops', async () => qianfanShopsForDesktop());
-
-  ipcMain.handle('cookie:localSummary', async () => localCookieSummary());
-
-  ipcMain.handle('cookie:testRelay', async (_e, url?: string) => testQianfanRelay(url));
-
-  ipcMain.handle('cookie:relayStatus', async (_e, url?: string) => fetchRelayAutoStatus(url));
-
-  ipcMain.handle('cookie:syncNow', async (_e, url?: string) => syncCookieViaRelay(url));
-
-  ipcMain.handle('cookie:startRelay', () => startQianfanRelay());
-
-  ipcMain.handle(
-    'cookie:pasteUpload',
-    async (_e, payload: { shopName: string; cookie: string }) => {
-      if (!payload?.shopName || !payload?.cookie) {
-        return { ok: false, hash8: '', length: 0, message: '请填写店铺和 Cookie' };
-      }
-      return pasteUploadCookie(payload.shopName, payload.cookie);
-    },
-  );
 
   ipcMain.handle('cloud:openSecretsPage', () => {
     const base = loadConfig().controlServerUrl.replace(/\/$/, '');

@@ -9,9 +9,9 @@ export function WebPage() {
 
   const urls = projects
     .map((p) => {
-        const url =
-          p.healthUrl?.replace(/\/api\/health\/?$/, '') ||
-          (p.ports?.[0] ? `http://127.0.0.1:${p.ports[0].port}` : null);
+      const url =
+        p.healthUrl?.replace(/\/api\/health\/?$/, '') ||
+        (p.ports?.[0] ? `http://127.0.0.1:${p.ports[0].port}` : null);
       return url ? { name: p.name, url, id: p.id } : null;
     })
     .filter(Boolean) as { name: string; url: string; id?: string }[];

@@ -6,7 +6,6 @@ import { initFileLogger, fileLog } from './file-logger';
 import { applyAutoLaunchFromConfig } from './auto-launch';
 import { processManager } from './process-manager';
 import { readProjectManifest } from './manifest-scanner';
-import { startLocalControlApi } from './local-control-api';
 import { DEFAULT_RISK_BY_CODE } from '../../../packages/control-shared/src/steward';
 
 process.on('uncaughtException', (err) => {
@@ -72,7 +71,6 @@ function createWindow() {
   });
 
   registerIpcHandlers(() => mainWindow);
-  void startLocalControlApi();
 
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     console.error('[renderer] crashed', details);

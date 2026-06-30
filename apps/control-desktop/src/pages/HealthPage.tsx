@@ -24,13 +24,7 @@ const DOT: Record<string, string> = {
   skipped: 'bg-muted-foreground',
 };
 
-const SIMPLE_IDS = new Set([
-  'local_manifest',
-  'git_unpushed',
-  'ports',
-  'qianfan_relay',
-  'qianfan_cookie',
-]);
+const SIMPLE_IDS = new Set(['local_manifest', 'git_unpushed', 'ports', 'exe_config']);
 
 function normalizeReport(raw: unknown): HealthCheckReport | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -86,7 +80,6 @@ export function HealthPage() {
 
   const goFix = (item: HealthCheckItem) => {
     if (item.repairAction === 'dialog:portConflicts') setPortConflictOpen(true);
-    else if (item.repairAction === 'nav:cookies') setPage('cookies');
     else if (item.repairAction === 'nav:git') setPage('git');
     else if (item.repairAction === 'nav:settings') setPage('settings');
     else if (item.repairAction === 'nav:ports') setPortConflictOpen(true);

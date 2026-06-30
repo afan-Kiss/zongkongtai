@@ -35,9 +35,7 @@ export function AboutPage() {
 
           <Row label="日志路径" value={info.logDir} />
 
-          <Row label="本地 API" value={info.localControlApiUrl} />
-
-          <Row label="本地数据目录" value={info.configDir} />
+          <Row label="配置路径" value={info.configPath} />
 
           <Row
             label="Native Helper"

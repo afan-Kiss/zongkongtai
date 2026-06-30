@@ -11,7 +11,6 @@ import { ProjectsPage } from '@/pages/ProjectsPage';
 import { TerminalPage } from '@/pages/TerminalPage';
 import { WebPage } from '@/pages/WebPage';
 import { PortsPage } from '@/pages/PortsPage';
-import { CookiesPage } from '@/pages/CookiesPage';
 import { WindowsPage } from '@/pages/WindowsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { GitPage } from '@/pages/GitPage';
@@ -37,7 +36,7 @@ const PAGES: Record<NavPage, React.ComponentType> = {
   terminal: TerminalPage,
   web: WebPage,
   ports: PortsPage,
-  cookies: CookiesPage,
+  cookies: OverviewPage,
   windows: WindowsPage,
   settings: SettingsPage,
   about: AboutPage,
@@ -54,7 +53,6 @@ const PAGE_LABELS: Partial<Record<NavPage, string>> = {
   terminal: '终端',
   web: 'Web 页面',
   ports: '端口',
-  cookies: 'Cookie',
   settings: '设置',
   about: '关于',
 };

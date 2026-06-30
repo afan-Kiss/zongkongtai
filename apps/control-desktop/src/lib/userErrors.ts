@@ -7,10 +7,6 @@ export function humanizeUserError(
   const msg = raw.trim();
   if (!msg) return '操作失败，请重试';
 
-  if (context === 'cookie') {
-    return '暂时无法读取本地 Cookie，请确认千帆中转机器人已运行并同步。';
-  }
-
   if (/Error invoking remote method 'native:arrangeQianfan'/i.test(msg)) {
     return '窗口排列组件异常，不影响其他功能。你可以手动排列窗口。';
   }

@@ -170,17 +170,6 @@ const api = {
     onFailed: (cb: (task: unknown) => void) => taskEvents('task:failed', cb),
     onCancelled: (cb: (task: unknown) => void) => taskEvents('task:cancelled', cb),
   },
-
-  cookie: {
-    testRelay: (url?: string) => ipcRenderer.invoke('cookie:testRelay', url),
-    relayStatus: (url?: string) => ipcRenderer.invoke('cookie:relayStatus', url),
-    syncNow: (url?: string) => ipcRenderer.invoke('cookie:syncNow', url),
-    startRelay: () => ipcRenderer.invoke('cookie:startRelay'),
-    localShops: () => ipcRenderer.invoke('cookie:localShops'),
-    localSummary: () => ipcRenderer.invoke('cookie:localSummary'),
-    pasteUpload: (payload: { shopName: string; cookie: string }) =>
-      ipcRenderer.invoke('cookie:pasteUpload', payload),
-  },
 };
 
 contextBridge.exposeInMainWorld('zhuboDesktop', api);

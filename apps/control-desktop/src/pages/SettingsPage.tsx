@@ -5,10 +5,7 @@ import { useAppStore } from '@/stores/appStore';
 
 export function SettingsPage() {
   const [cfg, setCfg] = useState<any>({});
-  const [testingRelay, setTestingRelay] = useState(false);
-  const [relayStatus, setRelayStatus] = useState('');
   const pushToast = useAppStore((s) => s.pushToast);
-  const projects = useAppStore((s) => s.projects);
   const setPage = useAppStore((s) => s.setPage);
 
   useEffect(() => {
@@ -29,26 +26,6 @@ export function SettingsPage() {
     pushToast('success', next ? '已开启开机自启' : '已关闭开机自启');
   };
 
-  const testRelay = async () => {
-    setTestingRelay(true);
-    try {
-      const r = await window.zhuboDesktop.cookie.testRelay(cfg.qianfanRelayUrl);
-      setRelayStatus(r.message);
-      pushToast(r.ok ? 'success' : 'info', r.message);
-    } finally {
-      setTestingRelay(false);
-    }
-  };
-
-  const openRelayProject = () => {
-    const relay = projects.find((p) => p.code === 'qianfan-relay' || p.name.includes('千帆中转'));
-    if (relay?.localPath) {
-      window.zhuboDesktop.shell.openPath(relay.localPath);
-    } else {
-      pushToast('info', '未找到千帆中转机器人项目');
-    }
-  };
-
   const resetCache = async () => {
     const r = await window.zhuboDesktop.config.resetLocalCache();
     pushToast(r.ok ? 'success' : 'info', r.message);
@@ -61,7 +38,7 @@ export function SettingsPage() {
   return (
     <div className="max-w-xl space-y-4 p-6">
       <h1 className="text-2xl font-semibold">设置</h1>
-      <p className="text-sm text-muted-foreground">本地项目、Git、端口、Cookie、终端管理</p>
+      <p className="text-sm text-muted-foreground">本地项目、Git、端口、终端管理</p>
 
       <Card>
         <CardHeader>
@@ -82,44 +59,6 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <div className="font-medium">Cookie 同步配置</div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <label className="block text-sm">
-            <span className="text-muted-foreground">千帆中转机器人地址</span>
-            <input
-              className="mt-1 w-full rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-sm"
-              value={cfg.qianfanRelayUrl || 'http://127.0.0.1:9323'}
-              onChange={(e) => setCfg({ ...cfg, qianfanRelayUrl: e.target.value })}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-muted-foreground">本地 Cookie API 端口</span>
-            <input
-              type="number"
-              className="mt-1 w-full rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-sm"
-              value={cfg.localControlApiPort || 4793}
-              onChange={(e) =>
-                setCfg({ ...cfg, localControlApiPort: Number(e.target.value) || 4793 })
-              }
-            />
-          </label>
-          <p className="text-xs text-muted-foreground">
-            {relayStatus || '其他本地项目可通过本地 Cookie API 读取 Cookie。'}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="secondary" onClick={testRelay} disabled={testingRelay}>
-              {testingRelay ? '测试中…' : '测试千帆连接'}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={openRelayProject}>
-              打开千帆中转机器人项目
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <div className="font-medium">本地数据</div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -128,9 +67,6 @@ export function SettingsPage() {
           </div>
           <div className="text-xs text-muted-foreground break-all">
             日志目录：{cfg.logDir || '—'}
-          </div>
-          <div className="text-xs text-muted-foreground break-all">
-            Cookie 存储：{cfg.cookieStorePath || '—'}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button

@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, Badge, StatusDot } from '@/components/ui
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAppStore } from '@/stores/appStore';
 import type { Project } from '@/types/desktop';
+import { DEFAULT_RISK_BY_CODE, normalizeRiskLevel } from '@zhubo/control-shared';
 import {
   formatPortList,
   findDuplicateGroups,
@@ -61,6 +62,9 @@ export function ProjectCard({ project }: { project: Project }) {
   const selectProject = useAppStore((s) => s.selectProject);
   const status = proc?.status || 'idle';
   const selfControl = isSelfControlProject(project);
+  const risk = normalizeRiskLevel(
+    (project as Project & { riskLevel?: string }).riskLevel || DEFAULT_RISK_BY_CODE[project.code],
+  );
   const ports = formatPortList(project.ports, 4);
   const portsDeduped = hasDuplicatePortRegistration(project.ports);
   const isRunning = status === 'running';
@@ -91,6 +95,7 @@ export function ProjectCard({ project }: { project: Project }) {
       pushToast('info', '总控工作台请直接关闭窗口，不要在此卡片启停。');
       return;
     }
+    if (risk === 'high' && !confirm(`确定停止「${project.name}」？\n该项目为关键服务。`)) return;
     await window.zhuboDesktop.process.stop(project.id, project);
     pushToast('info', `${project.name} 已停止`);
   };
@@ -100,6 +105,7 @@ export function ProjectCard({ project }: { project: Project }) {
       pushToast('info', '总控工作台请直接关闭窗口，不要在此卡片启停。');
       return;
     }
+    if (risk === 'high' && !confirm(`确定重启「${project.name}」？\n该项目为关键服务。`)) return;
     try {
       await window.zhuboDesktop.process.restart(project);
       pushToast('success', `${project.name} 正在重启`);
@@ -255,7 +261,7 @@ export function RightPanel() {
         <h3 className="font-medium text-foreground">今日建议</h3>
         <ul className="space-y-2 text-xs text-muted-foreground">
           <li>· 本地项目、Git、终端均可正常使用。</li>
-          <li>· Cookie 可在「Cookie」页从千帆中转机器人同步。</li>
+          <li>· 千帆机器人由独立项目管理。</li>
           {(portAnalysis?.seriousCount ?? 0) > 0 && (
             <li>
               · 有端口需要处理
@@ -283,8 +289,8 @@ export function RightPanel() {
           {dupes.length > 0 && <li>· 重复项目：{dupes.length} 组</li>}
         </ul>
         <div className="flex flex-col gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setPage('cookies')}>
-            Cookie 同步
+          <Button size="sm" variant="secondary" onClick={() => setPage('projects')}>
+            查看项目
           </Button>
           <Button size="sm" variant="secondary" onClick={() => setPage('git')}>
             Git 上传

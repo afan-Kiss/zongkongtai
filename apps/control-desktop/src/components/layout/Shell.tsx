@@ -6,16 +6,14 @@ import {
   Activity,
   TerminalSquare,
   Globe,
-  Cookie,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { cookieBarState } from '@/lib/localStatus';
 import { useAppStore } from '@/stores/appStore';
 import type { NavPage } from '@/types/desktop';
 import { useEffect, useState } from 'react';
 
-/** 左侧主导航 — 极简 8 项（端口/关于等进设置） */
+/** 左侧主导航 — 极简 7 项 */
 const MAIN_NAV: { id: NavPage; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: '总览', icon: LayoutDashboard },
   { id: 'projects', label: '项目', icon: FolderKanban },
@@ -23,7 +21,6 @@ const MAIN_NAV: { id: NavPage; label: string; icon: React.ElementType }[] = [
   { id: 'health', label: '简单体检', icon: Activity },
   { id: 'terminal', label: '终端', icon: TerminalSquare },
   { id: 'web', label: 'Web 页面', icon: Globe },
-  { id: 'cookies', label: 'Cookie', icon: Cookie },
   { id: 'settings', label: '设置', icon: Settings },
 ];
 
@@ -35,7 +32,7 @@ export function Sidebar() {
     <aside className="flex w-52 flex-col border-r border-border bg-card/40 p-3">
       <div className="mb-5 px-2">
         <div className="text-lg font-semibold tracking-tight">珠宝本地总控</div>
-        <div className="text-xs text-muted-foreground">本地项目、Git、端口、Cookie、终端管理</div>
+        <div className="text-xs text-muted-foreground">本地项目、Git、端口、终端管理</div>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5">
         {MAIN_NAV.map(({ id, label, icon: Icon }) => (
@@ -74,9 +71,7 @@ export function TopBar() {
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const runningCount = useAppStore((s) => s.runningCount);
-  const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
   const projects = useAppStore((s) => s.projects);
-  const setPage = useAppStore((s) => s.setPage);
 
   const portLabel = portAnalysis?.topBarLabel || '端口';
   const portText = portAnalysis?.topBarText || '正常';
@@ -85,8 +80,6 @@ export function TopBar() {
   const portWarn = !portOk || (portAnalysis?.duplicateCount ?? 0) > 0;
 
   const localOk = projects.length > 0;
-  const cookieFound = qianfanCookieUpdatedAt ? 4 : 0;
-  const cookie = cookieBarState(qianfanCookieUpdatedAt, cookieFound);
 
   const items: Array<{
     label: string;
@@ -96,15 +89,7 @@ export function TopBar() {
     clickable?: boolean;
     onClick?: () => void;
   }> = [
-    { label: '本地模式', ok: localOk, text: localOk ? '正常' : '待扫描', warn: !localOk },
-    {
-      label: 'Cookie',
-      ok: cookie.ok,
-      text: cookie.text,
-      warn: cookie.warn,
-      clickable: true,
-      onClick: () => setPage('cookies'),
-    },
+    { label: '本地总控', ok: localOk, text: localOk ? '正常' : '待扫描', warn: !localOk },
     {
       label: portLabel,
       ok: portOk,

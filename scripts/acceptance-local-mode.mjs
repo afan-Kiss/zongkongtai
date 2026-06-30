@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** 本地模式 — 静态验收（兼容 local-only） */
+/** 本地模式 — 静态验收 */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -19,7 +19,7 @@ const shell = read(path.join(SRC, 'components/layout/Shell.tsx'));
 if (shell.includes('用户名或密码错误') || shell.includes('云端未连接')) {
   failures.push('TopBar must not show cloud auth errors');
 }
-if (!shell.includes('本地模式')) failures.push('TopBar must show 本地模式');
+if (!shell.includes('本地总控')) failures.push('TopBar must show 本地总控');
 
 const bootstrap = read(path.join(SRC, 'hooks/useLocalBootstrap.ts'));
 if (!bootstrap.includes('projects.loadLocal')) {
@@ -28,7 +28,7 @@ if (!bootstrap.includes('projects.loadLocal')) {
 
 const ipc = read(path.join(ELECTRON, 'ipc.ts'));
 if (!ipc.includes('projects:loadLocal')) failures.push('ipc must expose projects:loadLocal');
-if (!ipc.includes('local-cookie-store')) failures.push('ipc must use local cookie store');
+if (ipc.includes('cookie:')) failures.push('ipc must not register cookie handlers');
 
 if (failures.length) {
   console.error('FAIL local mode acceptance:');
@@ -36,4 +36,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checks: failures.length === 0 ? 6 : 0 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: failures.length === 0 ? 5 : 0 }, null, 2));

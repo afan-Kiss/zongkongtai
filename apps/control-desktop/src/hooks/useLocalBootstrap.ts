@@ -6,7 +6,6 @@ export function useLocalBootstrap() {
   const setProjects = useAppStore((s) => s.setProjects);
   const setPortConflictAnalysis = useAppStore((s) => s.setPortConflictAnalysis);
   const portConflictIgnoredIds = useAppStore((s) => s.portConflictIgnoredIds);
-  const setQianfanCookie = useAppStore((s) => s.setQianfanCookie);
 
   useEffect(() => {
     const refresh = async () => {
@@ -25,13 +24,6 @@ export function useLocalBootstrap() {
       } catch {
         /* 端口检测失败不阻塞 */
       }
-
-      try {
-        const summary = await window.zhuboDesktop.cookie.localSummary();
-        setQianfanCookie(summary.latestUpdatedAt, summary.hash8 || null);
-      } catch {
-        setQianfanCookie(null, null);
-      }
     };
 
     refresh();
@@ -44,7 +36,5 @@ export function useLocalBootstrap() {
       clearInterval(t);
       offProc();
     };
-  }, [setProjects, setQianfanCookie, setPortConflictAnalysis, portConflictIgnoredIds]);
+  }, [setProjects, setPortConflictAnalysis, portConflictIgnoredIds]);
 }
-
-export { qianfanStaleMessage } from '@/lib/localStatus';

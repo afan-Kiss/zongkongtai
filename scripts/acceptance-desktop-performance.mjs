@@ -80,11 +80,14 @@ for (const p of ['git:', 'health:', 'backup:', 'deploy:', 'tasks:']) {
 }
 if (!app.includes('GlobalTaskBar')) failures.push('App.tsx missing GlobalTaskBar');
 
-// 7. Shell nav — 极简 8 项主导航
+// 7. Shell nav — 极简 7 项主导航
 const shell = read(path.join(SRC, 'components/layout/Shell.tsx'));
-const mainNavRequired = ['总览', '项目', 'Git 上传', '简单体检', '终端', 'Web 页面', 'Cookie', '设置'];
+const mainNavRequired = ['总览', '项目', 'Git 上传', '简单体检', '终端', 'Web 页面', '设置'];
 for (const label of mainNavRequired) {
   if (!shell.includes(label)) failures.push(`Shell missing ${label}`);
+}
+if (shell.includes("'cookies'") || /label:\s*['"]Cookie['"]/.test(shell)) {
+  failures.push('Shell MAIN_NAV must not include Cookie');
 }
 const mainNavForbidden = ['工作区', '备份回滚', '部署记录', '后台任务', '窗口管理', '端口', '关于'];
 for (const label of mainNavForbidden) {
@@ -104,8 +107,8 @@ if (
   failures.push('appStore.setProjects must use deduplicateProjects');
 }
 const mainNavIds = shell.match(/id:\s*'[^']+'/g) || [];
-if (mainNavIds.length !== 8) {
-  failures.push(`Shell MAIN_NAV must have exactly 8 items, found ${mainNavIds.length}`);
+if (mainNavIds.length !== 7) {
+  failures.push(`Shell MAIN_NAV must have exactly 7 items, found ${mainNavIds.length}`);
 }
 const bootstrap = read(path.join(SRC, 'hooks/useLocalBootstrap.ts'));
 if (!bootstrap.includes('projects.loadLocal')) {
@@ -138,7 +141,7 @@ if (/useEffect\(\(\) => \{\s*(loadLight|healthCheckLight)\(/.test(healthPage)) {
 
 // 10. OverviewPage simplified actions
 const overview = read(path.join(SRC, 'pages/OverviewPage.tsx'));
-if (!overview.includes('刷新状态') || !overview.includes('开始简单体检')) {
+if (!overview.includes('刷新状态') || !overview.includes('简单体检')) {
   failures.push('OverviewPage must have refresh and simple health buttons');
 }
 if (overview.includes('今日开工') || overview.includes('今日收工')) {
