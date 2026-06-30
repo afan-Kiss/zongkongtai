@@ -6,12 +6,19 @@ import type {
 } from '../../../packages/control-shared/src/steward';
 import { cloudClient } from './cloud-client';
 import { agentManager } from './agent-manager';
-import { inspectLegacy4791, closeLegacy4791 } from './port-4791';
-import { getScanRoot, scanManifestsLocal } from './manifest-scanner';
+import { inspectLegacy4791Async, closeLegacy4791 } from './port-4791';
+import { getScanRoot, scanManifestsLocal, readProjectManifest } from './manifest-scanner';
 import { loadConfig } from './config';
-import { listGitStatuses } from './git-manager';
+import { listGitStatusesAsync, collectGitProjects } from './git-manager';
+import { scanManifestFileForbidden } from './forbidden-url';
+import { scanLocalPortsAsync } from './port-manager';
 
-const FORBIDDEN_DOMAIN_RE = /xiangyuzhubao\.xyz|https:\/\/|wss:\/\//i;
+export type HealthProgress = (step: string, progress: number, message?: string) => void;
+
+const DEFAULT_HEALTH_BY_CODE: Record<string, string> = {
+  'zhubo-analysis': 'http://8.137.126.18/api/health',
+  'jade-accounting': 'http://8.137.126.18/account/api/health',
+};
 
 function item(
   partial: Omit<HealthCheckItem, 'repairable'> & { repairable?: boolean },
@@ -19,36 +26,50 @@ function item(
   return { repairable: false, ...partial };
 }
 
-export async function runHealthCheck(): Promise<HealthCheckReport> {
-  const items: HealthCheckItem[] = [];
-  const cfg = loadConfig();
+function resolveProjectHealthUrl(project: {
+  code?: string;
+  publicUrl?: string | null;
+  localHealthUrl?: string | null;
+  healthUrl?: string | null;
+}): string | null {
+  if (project.localHealthUrl) return project.localHealthUrl;
+  if (project.healthUrl) return project.healthUrl;
+  if (project.code && DEFAULT_HEALTH_BY_CODE[project.code])
+    return DEFAULT_HEALTH_BY_CODE[project.code];
+  if (project.publicUrl) {
+    const base = project.publicUrl.replace(/\/$/, '');
+    if (base.includes('/control')) return null;
+    return `${base}/api/health`;
+  }
+  return null;
+}
 
+export async function checkCloudHealth(signal?: AbortSignal): Promise<HealthCheckItem> {
+  void signal;
   try {
     const conn = await cloudClient.connect();
-    items.push(
-      item({
-        id: 'cloud_health',
-        title: '云端总控 health',
-        status: conn.ok ? 'ok' : 'error',
-        message: conn.ok ? '云端总控正常' : conn.message || '无法连接云端',
-        impact: '影响项目同步、Cookie、端口登记',
-        category: 'cloud',
-      }),
-    );
+    return item({
+      id: 'cloud_health',
+      title: '云端总控 health',
+      status: conn.ok ? 'ok' : 'error',
+      message: conn.ok ? '云端总控正常' : conn.message || '无法连接云端',
+      impact: '影响项目同步、Cookie、端口登记',
+      category: 'cloud',
+    });
   } catch (e) {
-    items.push(
-      item({
-        id: 'cloud_health',
-        title: '云端总控 health',
-        status: 'error',
-        message: e instanceof Error ? e.message : String(e),
-        category: 'cloud',
-      }),
-    );
+    return item({
+      id: 'cloud_health',
+      title: '云端总控 health',
+      status: 'error',
+      message: e instanceof Error ? e.message : String(e),
+      category: 'cloud',
+    });
   }
+}
 
+export function checkAgent(): HealthCheckItem[] {
   const agentSnap = agentManager.getSnapshot();
-  items.push(
+  return [
     item({
       id: 'agent_online',
       title: '本地 Agent 在线状态',
@@ -60,8 +81,6 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
       repairable: agentSnap.state !== 'online',
       category: 'agent',
     }),
-  );
-  items.push(
     item({
       id: 'agent_ws',
       title: 'Agent WebSocket',
@@ -71,84 +90,89 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
       repairable: agentSnap.state !== 'online',
       category: 'agent',
     }),
-  );
+  ];
+}
 
+export function checkManifests(): HealthCheckItem {
   const { manifests, warnings } = scanManifestsLocal();
-  items.push(
-    item({
-      id: 'manifest_count',
-      title: '项目 manifest',
-      status: manifests.length >= 11 ? 'ok' : manifests.length >= 5 ? 'warn' : 'error',
-      message: `已发现 ${manifests.length} 个 manifest${warnings.length ? `，${warnings.length} 条警告` : ''}`,
-      category: 'project',
-    }),
-  );
+  return item({
+    id: 'manifest_count',
+    title: '项目 manifest',
+    status: manifests.length >= 11 ? 'ok' : manifests.length >= 5 ? 'warn' : 'error',
+    message: `已发现 ${manifests.length} 个 manifest${warnings.length ? `，${warnings.length} 条警告` : ''}`,
+    category: 'project',
+  });
+}
 
+export async function checkPorts(signal?: AbortSignal): Promise<HealthCheckItem> {
   try {
-    const ports = await cloudClient.ports();
+    await scanLocalPortsAsync(signal);
+    const ports = await cloudClient.ports().catch(() => []);
     const conflicts = ports.filter(
       (p: { conflictLevel?: string }) => p.conflictLevel === 'conflict',
     );
-    items.push(
-      item({
-        id: 'port_conflicts',
-        title: '端口冲突',
-        status: conflicts.length === 0 ? 'ok' : 'warn',
-        message: conflicts.length ? `${conflicts.length} 个端口冲突` : '无严重冲突',
-        category: 'project',
-      }),
-    );
+    return item({
+      id: 'port_conflicts',
+      title: '端口冲突',
+      status: conflicts.length === 0 ? 'ok' : 'warn',
+      message: conflicts.length ? `${conflicts.length} 个端口冲突` : '无严重冲突',
+      category: 'project',
+    });
   } catch {
-    items.push(
-      item({
-        id: 'port_conflicts',
-        title: '端口冲突',
-        status: 'skipped',
-        message: '云端未连接，跳过',
-        category: 'project',
-      }),
-    );
+    return item({
+      id: 'port_conflicts',
+      title: '端口冲突',
+      status: 'skipped',
+      message: '端口扫描超时或云端未连接，已跳过',
+      category: 'project',
+    });
   }
+}
 
-  const legacy4791 = await inspectLegacy4791();
-  items.push(
-    item({
-      id: 'legacy_4791',
-      title: '本地 4791 遗留进程',
-      status: legacy4791.listening ? 'warn' : 'ok',
-      message: legacy4791.listening
-        ? `4791 被占用：${legacy4791.processName || legacy4791.pid}`
-        : '4791 未占用',
-      repairAction: 'ports:close4791',
-      repairable: legacy4791.listening,
-      category: 'infra',
-    }),
-  );
+export async function checkLegacy4791(signal?: AbortSignal): Promise<HealthCheckItem> {
+  const legacy4791 = await inspectLegacy4791Async(signal);
+  return item({
+    id: 'legacy_4791',
+    title: '本地 4791 遗留进程',
+    status: legacy4791.listening ? 'warn' : 'ok',
+    message: legacy4791.listening
+      ? `4791 被占用：${legacy4791.processName || legacy4791.pid}`
+      : '4791 未占用',
+    repairAction: 'ports:close4791',
+    repairable: legacy4791.listening,
+    category: 'infra',
+  });
+}
 
+export function checkForbiddenRuntimeUrls(): HealthCheckItem {
   const scanRoot = getScanRoot();
   let badConfigCount = 0;
+  const samples: string[] = [];
   if (fs.existsSync(scanRoot)) {
     for (const ent of fs.readdirSync(scanRoot, { withFileTypes: true })) {
       if (!ent.isDirectory()) continue;
       const manifestPath = path.join(scanRoot, ent.name, 'zhubo-control.manifest.json');
-      if (
-        fs.existsSync(manifestPath) &&
-        FORBIDDEN_DOMAIN_RE.test(fs.readFileSync(manifestPath, 'utf8'))
-      ) {
+      if (!fs.existsSync(manifestPath)) continue;
+      const bad = scanManifestFileForbidden(fs.readFileSync(manifestPath, 'utf8'));
+      if (bad.length) {
         badConfigCount++;
+        samples.push(...bad.slice(0, 2));
       }
     }
   }
-  items.push(
-    item({
-      id: 'forbidden_urls',
-      title: '域名 / wss 正式配置',
-      status: badConfigCount ? 'error' : 'ok',
-      message: badConfigCount ? `发现 ${badConfigCount} 个 manifest 含禁用域名` : '未发现禁用域名',
-      category: 'config',
-    }),
-  );
+  return item({
+    id: 'forbidden_urls',
+    title: '域名 / wss 正式配置',
+    status: badConfigCount ? 'error' : 'ok',
+    message: badConfigCount
+      ? `发现 ${badConfigCount} 个 manifest 运行 URL 不合规${samples[0] ? `（如 ${samples[0]}）` : ''}`
+      : '未发现禁用域名（GitHub remote 已排除）',
+    category: 'config',
+  });
+}
 
+export async function checkQianfanCookie(): Promise<HealthCheckItem[]> {
+  const items: HealthCheckItem[] = [];
   try {
     const shops = await cloudClient.qianfanShops();
     const canonical = shops.filter((s: { archived?: boolean }) => !s.archived);
@@ -191,60 +215,103 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
       }),
     );
   }
+  return items;
+}
 
-  for (const t of [
-    {
-      code: 'zhubo-analysis',
-      label: '主播分析',
-      url: 'http://8.137.126.18/live-business-api/api/health',
-    },
-    { code: 'jade-accounting', label: '记账', url: 'http://8.137.126.18/account/api/health' },
-  ]) {
-    try {
-      const r = await cloudClient.healthCheck(t.url);
+export async function checkProjectHealth(
+  projects: Array<{
+    code?: string;
+    name?: string;
+    publicUrl?: string | null;
+    localHealthUrl?: string | null;
+    healthUrl?: string | null;
+  }>,
+): Promise<HealthCheckItem[]> {
+  const items: HealthCheckItem[] = [];
+  const targets = projects.filter((p) =>
+    ['zhubo-analysis', 'jade-accounting', 'jade-scan', 'xiangyu-system'].includes(p.code || ''),
+  );
+
+  for (const p of targets) {
+    const url = resolveProjectHealthUrl(p);
+    if (!url) {
       items.push(
         item({
-          id: `health_${t.code}`,
-          title: `${t.label} health`,
-          status: r.ok ? 'ok' : 'error',
-          message: r.ok ? '健康检查通过' : r.message || 'health 失败',
+          id: `health_${p.code}`,
+          title: `${p.name || p.code} health`,
+          status: 'skipped',
+          message: '未配置 health URL',
+          category: 'project',
+        }),
+      );
+      continue;
+    }
+    try {
+      const r = await cloudClient.healthCheck(url);
+      items.push(
+        item({
+          id: `health_${p.code}`,
+          title: `${p.name || p.code} health`,
+          status: r.ok ? 'ok' : 'warn',
+          message: r.ok ? `健康检查通过 (${url})` : r.message || `health 失败 (${url})`,
           category: 'project',
         }),
       );
     } catch (e) {
       items.push(
         item({
-          id: `health_${t.code}`,
-          title: `${t.label} health`,
-          status: 'error',
+          id: `health_${p.code}`,
+          title: `${p.name || p.code} health`,
+          status: 'warn',
           message: e instanceof Error ? e.message : String(e),
           category: 'project',
         }),
       );
     }
   }
+  return items;
+}
 
+export async function checkGitQuick(
+  projects: Parameters<typeof listGitStatusesAsync>[0],
+  signal?: AbortSignal,
+): Promise<HealthCheckItem> {
   try {
-    const projects = await cloudClient.projects();
-    const unpushed = listGitStatuses(projects).filter(
+    const statuses = await listGitStatusesAsync(projects, {
+      fetchRemote: false,
+      concurrency: 2,
+      signal,
+    });
+    const unpushed = statuses.filter(
       (g) => g.hasUnpushed || g.state === 'unpushed' || g.state === 'dirty',
     );
-    items.push(
-      item({
-        id: 'git_unpushed',
-        title: 'Git 未 push',
-        status: unpushed.length === 0 ? 'ok' : 'warn',
-        message: unpushed.length ? `${unpushed.length} 个项目有未 push 改动` : '全部已同步',
-        repairAction: 'nav:git',
-        repairable: unpushed.length > 0,
-        category: 'git',
-      }),
-    );
+    return item({
+      id: 'git_unpushed',
+      title: 'Git 未 push',
+      status: unpushed.length === 0 ? 'ok' : 'warn',
+      message: unpushed.length ? `${unpushed.length} 个项目有未 push 改动` : '全部已同步',
+      repairAction: 'nav:git',
+      repairable: unpushed.length > 0,
+      category: 'git',
+    });
   } catch {
-    /* skip */
+    return item({
+      id: 'git_unpushed',
+      title: 'Git 未 push',
+      status: 'skipped',
+      message: 'Git 快速检查超时，已跳过',
+      category: 'git',
+    });
   }
+}
 
-  items.push(
+export function checkExeConfig(): HealthCheckItem[] {
+  const cfg = loadConfig();
+  const { manifests } = scanManifestsLocal();
+  const incomplete = manifests.filter(
+    (m) => !m.code || !m.name || !(m.ports?.length || m.services?.length),
+  );
+  return [
     item({
       id: 'prod_db_path',
       title: '生产 DB 路径',
@@ -252,9 +319,6 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
       message: '应为 apps/control-server/prod.db（部署脚本已固定）',
       category: 'infra',
     }),
-  );
-
-  items.push(
     item({
       id: 'exe_config',
       title: 'EXE 配置完整性',
@@ -263,12 +327,6 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
         cfg.controlServerUrl && cfg.scanRoot ? '配置完整' : '缺少 controlServerUrl 或 scanRoot',
       category: 'config',
     }),
-  );
-
-  const incomplete = manifests.filter(
-    (m) => !m.code || !m.name || !(m.ports?.length || m.services?.length),
-  );
-  items.push(
     item({
       id: 'manifest_fields',
       title: 'manifest 字段完整性',
@@ -276,8 +334,10 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
       message: incomplete.length ? `${incomplete.length} 个 manifest 缺端口/服务` : '字段完整',
       category: 'config',
     }),
-  );
+  ];
+}
 
+function summarize(items: HealthCheckItem[]): HealthCheckReport {
   return {
     checkedAt: new Date().toISOString(),
     summary: {
@@ -288,6 +348,77 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
     },
     items,
   };
+}
+
+/** 轻量体检 — 页面打开时用 */
+export async function runHealthCheckLight(): Promise<HealthCheckReport> {
+  const items: HealthCheckItem[] = [
+    await checkCloudHealth(),
+    ...checkAgent(),
+    checkManifests(),
+    ...checkExeConfig().slice(1, 2),
+  ];
+  return summarize(items);
+}
+
+/** 完整体检 — 后台任务 */
+export async function runHealthCheckFull(
+  onProgress?: HealthProgress,
+  signal?: AbortSignal,
+): Promise<HealthCheckReport> {
+  const items: HealthCheckItem[] = [];
+  const steps: Array<{ name: string; run: () => Promise<HealthCheckItem | HealthCheckItem[]> }> = [
+    { name: '云端 health', run: () => checkCloudHealth(signal) },
+    { name: 'Agent', run: async () => checkAgent() },
+    { name: 'manifest', run: async () => checkManifests() },
+    { name: '端口', run: () => checkPorts(signal) },
+    { name: '4791', run: () => checkLegacy4791(signal) },
+    { name: '禁用 URL', run: async () => checkForbiddenRuntimeUrls() },
+    { name: '千帆 Cookie', run: () => checkQianfanCookie() },
+    {
+      name: '项目 health',
+      run: async () => {
+        const projects = await cloudClient.projects().catch(() => []);
+        return checkProjectHealth(projects);
+      },
+    },
+    {
+      name: 'Git',
+      run: async () => {
+        const projects = await cloudClient.projects().catch(() => []);
+        return checkGitQuick(projects, signal);
+      },
+    },
+    { name: 'EXE 配置', run: async () => checkExeConfig() },
+  ];
+
+  for (let i = 0; i < steps.length; i++) {
+    if (signal?.aborted) break;
+    const step = steps[i];
+    onProgress?.(step.name, Math.round(((i + 1) / steps.length) * 100), `正在检查：${step.name}`);
+    try {
+      const result = await step.run();
+      if (Array.isArray(result)) items.push(...result);
+      else items.push(result);
+    } catch (e) {
+      items.push(
+        item({
+          id: `step_${i}`,
+          title: step.name,
+          status: 'skipped',
+          message: e instanceof Error ? e.message : '检查失败，已跳过',
+          category: 'config',
+        }),
+      );
+    }
+  }
+
+  return summarize(items);
+}
+
+/** @deprecated 使用 runHealthCheckFull */
+export async function runHealthCheck(): Promise<HealthCheckReport> {
+  return runHealthCheckFull();
 }
 
 export async function runHealthRepair(action: string): Promise<{ ok: boolean; message: string }> {
@@ -301,13 +432,14 @@ export async function runHealthRepair(action: string): Promise<{ ok: boolean; me
   }
 }
 
-export async function runWorkdayStart(): Promise<{
-  ok: boolean;
-  message: string;
-  report: HealthCheckReport;
-}> {
+export async function runWorkdayStart(
+  onProgress?: HealthProgress,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; message: string; report: HealthCheckReport }> {
+  onProgress?.('Agent', 10, '检查 Agent…');
   await agentManager.ensureRunning();
-  const report = await runHealthCheck();
+  onProgress?.('完整体检', 30, '运行开工体检…');
+  const report = await runHealthCheckFull(onProgress, signal);
   const issues = report.items.filter((i) => i.status === 'error' || i.status === 'warn');
   return {
     ok: report.summary.error === 0,
@@ -316,15 +448,47 @@ export async function runWorkdayStart(): Promise<{
   };
 }
 
-export async function runWorkdayEnd(): Promise<{
+export async function runWorkdayEnd(
+  onProgress?: HealthProgress,
+  signal?: AbortSignal,
+): Promise<{
   ok: boolean;
   message: string;
-  unpushed: ReturnType<typeof listGitStatuses>;
+  unpushed: Awaited<ReturnType<typeof listGitStatusesAsync>>;
 }> {
   const projects = await cloudClient.projects().catch(() => []);
-  const unpushed = listGitStatuses(projects).filter(
-    (g) => g.hasUnpushed || g.state === 'unpushed' || g.state === 'dirty',
-  );
+  const items = collectGitProjects(projects);
+  const unpushed: Awaited<ReturnType<typeof listGitStatusesAsync>> = [];
+
+  for (let i = 0; i < items.length; i++) {
+    if (signal?.aborted) break;
+    const p = items[i];
+    onProgress?.(
+      'Git',
+      Math.round(((i + 1) / items.length) * 100),
+      `正在检查 Git ${i + 1}/${items.length}：${p.projectName}`,
+    );
+    const st = await listGitStatusesAsync(
+      [
+        {
+          code: p.projectCode,
+          name: p.projectName,
+          localPath: p.localPath,
+          gitRemote: p.gitRemote,
+        },
+      ],
+      {
+        fetchRemote: false,
+        concurrency: 1,
+        signal,
+      },
+    );
+    const row = st[0];
+    if (row && (row.hasUnpushed || row.state === 'unpushed' || row.state === 'dirty')) {
+      unpushed.push(row);
+    }
+  }
+
   return {
     ok: unpushed.length === 0,
     message: unpushed.length
