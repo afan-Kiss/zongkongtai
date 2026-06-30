@@ -19,7 +19,7 @@ sftp.put(
 )
 sftp.close()
 _, o, _ = c.exec_command(
-    "cd /www/wwwroot/zhubo-control-center/apps/control-server && export DATABASE_URL=file:./prisma/prod.db && npx tsx prisma/seed.ts",
+    "cd /www/wwwroot/zhubo-control-center/apps/control-server && export DATABASE_URL=file:./prod.db && npx tsx prisma/seed.ts",
     timeout=120,
 )
 print(o.read().decode("utf-8", errors="replace"))

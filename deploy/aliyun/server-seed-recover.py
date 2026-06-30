@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
+"""fix：从 .env 导出变量并运行 seed（需 --execute）。"""
 import sys
-import paramiko
 from pathlib import Path
 
-def sp(s):
-    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
-    print(s.encode(enc, errors="replace").decode(enc, errors="replace"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ops_config import CONTROL_DB, CONTROL_PM2, CONTROL_ROOT
+from ops_lib import parse_fix_args, run_fix_cmds, run_ssh, ssh_session
+
 
 def parse_env(text: str) -> dict[str, str]:
     out: dict[str, str] = {}
@@ -17,42 +19,31 @@ def parse_env(text: str) -> dict[str, str]:
         out[k.strip()] = v.strip().strip('"').strip("'")
     return out
 
-ROOT = Path(__file__).resolve().parents[2]
-pwd = ""
-for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
-    if line.startswith("SSH_PASS="):
-        pwd = line.split("=", 1)[1].strip().strip('"').strip("'")
 
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect("8.137.126.18", username="root", password=pwd, timeout=60)
-
-_, o, _ = c.exec_command("cat /www/wwwroot/zhubo-control-center/.env", timeout=30)
-env = parse_env(o.read().decode("utf-8", errors="replace"))
-
-exports = " ".join(
-    f'export {k}="{v.replace(chr(34), chr(92)+chr(34))}"'
-    for k, v in env.items()
-    if k.isidentifier() or k.replace("_", "").isalnum()
-)
-
-DEPLOY = "/www/wwwroot/zhubo-control-center"
-cmd = f"""
+def main() -> None:
+    execute = parse_fix_args("server seed recover")
+    with ssh_session() as client:
+        _, o, _ = client.exec_command(f"cat {CONTROL_ROOT}/.env", timeout=30)
+        env = parse_env(o.read().decode("utf-8", errors="replace"))
+    exports = " ".join(
+        f'export {k}="{v.replace(chr(34), chr(92)+chr(34))}"'
+        for k, v in env.items()
+        if k.isidentifier() or k.replace("_", "").isalnum()
+    )
+    cmd = f"""
 set -e
 export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null
 {exports}
-cd {DEPLOY}/apps/control-server
-export DATABASE_URL="${{DATABASE_URL:-file:./prisma/prod.db}}"
+cd {CONTROL_ROOT}/apps/control-server
+export DATABASE_URL="file:{CONTROL_DB}"
 npx tsx prisma/seed.ts
-rm -rf prisma/prisma
-cd {DEPLOY}
-pm2 restart zhubo-control-center
+cd {CONTROL_ROOT}
+pm2 restart {CONTROL_PM2}
 sleep 2
-sqlite3 apps/control-server/prisma/prod.db "select count(*) from User;"
+sqlite3 "{CONTROL_DB}" "select count(*) from User;"
 """
-_, o, e = c.exec_command(cmd, timeout=180)
-sp(o.read().decode("utf-8", errors="replace"))
-err = e.read().decode("utf-8", errors="replace")
-if err.strip():
-    sp("ERR:\n" + err)
-c.close()
+    run_fix_cmds([("seed recover", cmd)], execute=execute, timeout=180)
+
+
+if __name__ == "__main__":
+    main()

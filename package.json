@@ -16,6 +16,7 @@
     "build": "npm run build -w @zhubo/control-shared && npm run build -w @zhubo/control-web && npm run build -w @zhubo/control-server",
     "build:desktop": "npm run build -w @zhubo/control-desktop",
     "pack:desktop": "npm run pack -w @zhubo/control-desktop",
+    "pack:desktop:clean": "node scripts/pack-desktop-clean.mjs",
     "pack:desktop:fresh": "npm run build -w @zhubo/control-desktop && npm run pack -w @zhubo/control-desktop -- --config.directories.output=dist-desktop-pack",
     "start": "npm run start -w @zhubo/control-server",
     "db:generate": "npm run db:generate -w @zhubo/control-server",

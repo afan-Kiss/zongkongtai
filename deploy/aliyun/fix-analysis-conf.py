@@ -1,7 +1,13 @@
+#!/usr/bin/env python3
+"""fix：写入 zhubo-analysis nginx 配置（需 --execute；不 reload/restart nginx）。"""
 import os
-import paramiko
+import sys
+from pathlib import Path
 
-PASSWORD = os.environ.get("SSH_PASS", "")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ops_lib import parse_fix_args, run_fix_cmds, run_ssh, ssh_session
+
 FIXED = r"""# zhubo-analysis + control-center reverse proxy
 
 server {
@@ -49,21 +55,25 @@ server {
 }
 """
 
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect("8.137.126.18", username="root", password=PASSWORD, timeout=60)
-c.exec_command("cat > /etc/aa_nginx/conf.d/zhubo-analysis.conf << 'NGXEOF'\n" + FIXED + "\nNGXEOF")
-cmds = [
-    "/usr/sbin/aa_nginx -t",
-    "master_pid=$(ps aux | awk '/nginx: master process \\/usr\\/sbin\\/aa_nginx/ && !/grep/ {print $2; exit}'); kill -HUP $master_pid",
-    "curl -sf http://127.0.0.1/control/api/health",
-    "curl -sf http://127.0.0.1/api/health",
-]
-for cmd in cmds:
-    print(">>>", cmd)
-    _, o, e = c.exec_command(cmd, timeout=60)
-    print(o.read().decode("utf-8", errors="replace"))
-    err = e.read().decode("utf-8", errors="replace")
-    if err.strip():
-        print("ERR:", err.rstrip())
-c.close()
+
+def main() -> None:
+    execute = parse_fix_args("写入 nginx 分析站配置（不 reload nginx）")
+    print("策略：即使 --execute 也仅写入配置文件，不会 reload/restart nginx。")
+    write_cmd = (
+        "cat > /etc/aa_nginx/conf.d/zhubo-analysis.conf << 'NGXEOF'\n"
+        + FIXED
+        + "\nNGXEOF\n/usr/sbin/aa_nginx -t"
+    )
+    run_fix_cmds([("write nginx conf", write_cmd)], execute=execute, timeout=60)
+    if execute:
+        with ssh_session() as client:
+            run_ssh(client, "head -5 /etc/aa_nginx/conf.d/zhubo-analysis.conf", timeout=15)
+
+
+if __name__ == "__main__":
+    pwd = os.environ.get("SSH_PASS", "")
+    if not pwd:
+        from ops_lib import load_ssh_password
+
+        load_ssh_password()
+    main()

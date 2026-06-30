@@ -28,7 +28,7 @@ def run(cmd: str) -> int:
 run(
     """
 cd /www/wwwroot/zhubo-control-center/apps/control-server
-export DATABASE_URL=file:./prisma/prod.db
+export DATABASE_URL=file:./prod.db
 npx tsx prisma/seed.ts || true
 """
 )

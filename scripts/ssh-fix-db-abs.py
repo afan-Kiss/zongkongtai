@@ -15,7 +15,7 @@ token = next(
     if line.startswith("SERVICE_TOKEN=")
 )
 
-DB = "/www/wwwroot/zhubo-control-center/apps/control-server/prisma/prod.db"
+DB = "/www/wwwroot/zhubo-control-center/apps/control-server/prod.db"
 
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())

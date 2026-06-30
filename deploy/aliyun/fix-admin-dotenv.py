@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-import paramiko, sys
-from pathlib import Path
-ROOT = Path(__file__).resolve().parents[2]
-pwd = next(l.split("=",1)[1].strip().strip('"').strip("'") for l in (ROOT/".env").read_text(encoding="utf-8").splitlines() if l.startswith("SSH_PASS="))
-c = paramiko.SSHClient(); c.set_missing_host_key_policy(paramiko.AutoAddPolicy()); c.connect("8.137.126.18", username="root", password=pwd, timeout=60)
-cmd = r"""
+"""fix：同步 admin 用户 bcrypt（需 --execute；默认 dry-run）。"""
+from ops_config import CONTROL_ROOT
+from ops_lib import parse_fix_args, run_ssh, ssh_session
+
+NODE_CMD = r"""
 cd /www/wwwroot/zhubo-control-center/apps/control-server
 node -e "
 require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
@@ -23,9 +22,17 @@ const prisma = new PrismaClient();
 })().catch(e => { console.error('ERR', e.message); process.exit(1); });
 "
 """
-_, o, e = c.exec_command(cmd, timeout=45)
-sys.stdout.buffer.write(o.read())
-err = e.read().decode("utf-8", errors="replace")
-if err.strip():
-    print("STDERR:", err[:300])
-c.close()
+
+
+def main() -> None:
+    execute = parse_fix_args("同步 admin 用户密码哈希到生产库")
+    print("将执行：Node 脚本 upsert admin 用户（使用服务器 .env 中 ADMIN_PASSWORD）")
+    print("不会重置 ADMIN_PASSWORD 或 Cookie。")
+    if not execute:
+        return
+    with ssh_session() as client:
+        run_ssh(client, NODE_CMD, timeout=45)
+
+
+if __name__ == "__main__":
+    main()

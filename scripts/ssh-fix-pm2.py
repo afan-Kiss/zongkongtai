@@ -22,14 +22,14 @@ sftp.close()
 
 cmd = """
 cd /www/wwwroot/zhubo-control-center
-sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:./prisma/prod.db|' .env
+sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:./prod.db|' .env
 grep DATABASE_URL .env
 pm2 delete zhubo-control-center || true
 pm2 start ecosystem.config.cjs
 pm2 save
 sleep 2
 curl -sf http://127.0.0.1:4790/api/health
-cd apps/control-server && DATABASE_URL=file:./prisma/prod.db node -e "const {PrismaClient}=require('@prisma/client'); const p=new PrismaClient(); p.secretStore.count().then(c=>console.log('secret count',c)).finally(()=>p.\\$disconnect())"
+cd apps/control-server && DATABASE_URL=file:./prod.db node -e "const {PrismaClient}=require('@prisma/client'); const p=new PrismaClient(); p.secretStore.count().then(c=>console.log('secret count',c)).finally(()=>p.\\$disconnect())"
 """
 _, o, _ = c.exec_command(cmd, timeout=120)
 print(o.read().decode("utf-8", errors="replace"))

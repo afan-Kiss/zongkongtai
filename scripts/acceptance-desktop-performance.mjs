@@ -238,6 +238,22 @@ if (!asyncExec.includes('MAX_OUTPUT_CHARS')) {
 if (!procMgr.includes('stopAll 需要传入 projects 风险信息')) {
   failures.push('stopAll must require projects risk map');
 }
+
+// 23. processManager.stop requires risk meta; no bare single-arg calls
+const bareStopRe = /processManager\.stop\s*\(\s*[^,)]+?\s*\)/g;
+const bareStops = [...procMgr.matchAll(bareStopRe)].filter(
+  (m) => !m[0].includes('stopUnsafeForInternalOnly'),
+);
+if (bareStops.length) {
+  failures.push('processManager.stop must not be called with projectId only');
+}
+if (!procMgr.includes('stopUnsafeForInternalOnly')) {
+  failures.push('processManager must expose stopUnsafeForInternalOnly for internal cleanup');
+}
+if (!procMgr.includes('projectRiskMeta')) {
+  failures.push('processManager.stop must require projectRiskMeta');
+}
+
 const mainTs = read(path.join(ELECTRON, 'main.ts'));
 if (!mainTs.includes('buildStopAllProjects')) {
   failures.push('main.ts must pass projects to stopAll');
@@ -249,4 +265,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checks: 22 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: 23 }, null, 2));

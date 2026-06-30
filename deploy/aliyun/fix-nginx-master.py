@@ -1,25 +1,16 @@
-import os
-import paramiko
+#!/usr/bin/env python3
+"""只读：检查 aa_nginx master/worker 与 4880 健康（不 kill / 不 HUP）。"""
+from ops_lib import parse_fix_args, run_check_cmds
 
-PASSWORD = os.environ.get("SSH_PASS", "")
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect("8.137.126.18", username="root", password=PASSWORD, timeout=60)
+print("说明：本脚本仅只读诊断，不会 kill 或 HUP nginx。")
+parse_fix_args("（兼容参数）nginx master 只读检查")
 
-cmds = [
-    "cat /etc/systemd/system/aa_nginx.service",
-    "ls -la /var/run/nginx.pid /run/nginx.pid /etc/aa_nginx/logs/nginx.pid 2>/dev/null",
-    "curl -v http://127.0.0.1:4880/api/health 2>&1 | tail -25",
-    "kill 257754 2>/dev/null; sleep 1; ss -lntp | grep 4880 || echo no4880",
-    "kill -HUP 78499; sleep 1; ss -lntp | grep -E '4880|80'",
-    "curl -sf http://127.0.0.1:4880/api/health || curl -v http://127.0.0.1:4880/api/health 2>&1 | tail -15",
-]
-
-for cmd in cmds:
-    print("\n>>>", cmd)
-    _, o, e = c.exec_command(cmd, timeout=60)
-    print(o.read().decode("utf-8", errors="replace"))
-    err = e.read().decode("utf-8", errors="replace")
-    if err.strip():
-        print("ERR:", err.rstrip())
-c.close()
+run_check_cmds(
+    [
+        "cat /etc/systemd/system/aa_nginx.service",
+        "ls -la /var/run/nginx.pid /run/nginx.pid /etc/aa_nginx/logs/nginx.pid 2>/dev/null",
+        "curl -v http://127.0.0.1:4880/api/health 2>&1 | tail -25",
+        "ss -lntp | grep -E '4880|80' || echo no_listeners",
+    ],
+    timeout=60,
+)

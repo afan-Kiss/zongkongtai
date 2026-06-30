@@ -16,9 +16,9 @@ c.connect("8.137.126.18", username="root", password=pwd, timeout=60)
 cmds = [
     "tail -50 /www/wwwroot/zhubo-control-center/logs/pm2-error.log 2>/dev/null",
     "tail -30 /www/wwwroot/zhubo-control-center/logs/pm2-out.log 2>/dev/null",
-    "sqlite3 /www/wwwroot/zhubo-control-center/apps/control-server/prisma/prod.db '.tables'",
-    "sqlite3 /www/wwwroot/zhubo-control-center/apps/control-server/prisma/prod.db \"PRAGMA table_info(SecretStore);\"",
-    "ls -la /www/wwwroot/zhubo-control-center/apps/control-server/prisma/prod.db",
+    "sqlite3 /www/wwwroot/zhubo-control-center/apps/control-server/prod.db '.tables'",
+    "sqlite3 /www/wwwroot/zhubo-control-center/apps/control-server/prod.db \"PRAGMA table_info(SecretStore);\"",
+    "ls -la /www/wwwroot/zhubo-control-center/apps/control-server/prod.db",
     "pm2 logs zhubo-control-center --lines 20 --nostream 2>&1",
 ]
 for cmd in cmds:

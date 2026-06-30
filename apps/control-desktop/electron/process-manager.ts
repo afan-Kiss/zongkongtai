@@ -373,9 +373,14 @@ export class ProcessManager extends EventEmitter {
 
   async stop(
     projectId: string,
-    project?: { code?: string; name?: string; riskLevel?: string },
+    projectRiskMeta: { code?: string; name?: string; riskLevel?: string },
   ): Promise<void> {
-    if (project) assertRiskAllowed(project, 'stop');
+    assertRiskAllowed(projectRiskMeta, 'stop');
+    return this.stopUnsafeForInternalOnly(projectId);
+  }
+
+  /** 内部清理已知进程；调用方须已做风险校验，禁止 UI 直接使用。 */
+  async stopUnsafeForInternalOnly(projectId: string): Promise<void> {
     const managed = this.processes.get(projectId);
     const term = this.terminals.get(projectId);
     if (!term && !managed) return;
@@ -433,7 +438,7 @@ export class ProcessManager extends EventEmitter {
         skipped.push({ id: proc.projectId, reason: '中风险项目需确认' });
         continue;
       }
-      await this.stop(proc.projectId, { code: meta.code, name: meta.name, riskLevel: risk });
+      await this.stopUnsafeForInternalOnly(proc.projectId);
       stopped.push(proc.projectId);
     }
     return { stopped, skipped };

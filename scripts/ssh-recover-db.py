@@ -32,11 +32,11 @@ run(
     """
 set -e
 cd /www/wwwroot/zhubo-control-center
-DB=/www/wwwroot/zhubo-control-center/apps/control-server/prisma/prod.db
+DB=/www/wwwroot/zhubo-control-center/apps/control-server/prod.db
 NESTED=/www/wwwroot/zhubo-control-center/apps/control-server/prisma/prisma/prod.db
 if [ -f "$NESTED" ] && [ ! -s "$DB" ]; then cp "$NESTED" "$DB"; fi
 if [ -f "$NESTED" ] && [ "$(stat -c%s "$DB" 2>/dev/null || echo 0)" -lt 1000 ]; then cp "$NESTED" "$DB"; fi
-sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:./apps/control-server/prisma/prod.db|' .env
+sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:./apps/control-server/prod.db|' .env
 grep DATABASE_URL .env
 pm2 delete zhubo-control-center 2>/dev/null || true
 pm2 start ecosystem.config.cjs

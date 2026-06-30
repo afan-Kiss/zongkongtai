@@ -146,12 +146,12 @@ DEPLOY_DIR={DEPLOY_DIR}
 ENV_BAK="/tmp/control-env-backup-$$.env"
 DB_BAK="/tmp/control-prod-db-backup-$$.db"
 if [ -f "$DEPLOY_DIR/.env" ]; then cp "$DEPLOY_DIR/.env" "$ENV_BAK"; fi
-if [ -f "$DEPLOY_DIR/apps/control-server/prisma/prod.db" ]; then cp "$DEPLOY_DIR/apps/control-server/prisma/prod.db" "$DB_BAK"; fi
+if [ -f "$DEPLOY_DIR/apps/control-server/prod.db" ]; then cp "$DEPLOY_DIR/apps/control-server/prod.db" "$DB_BAK"; fi
 rm -rf "$DEPLOY_DIR"
 mkdir -p "$DEPLOY_DIR"
 unzip -q /tmp/control-upload/control-center.zip -d "$DEPLOY_DIR"
 if [ -f "$ENV_BAK" ]; then cp "$ENV_BAK" "$DEPLOY_DIR/.env"; else cp /tmp/control-upload/server.env "$DEPLOY_DIR/.env"; fi
-if [ -f "$DB_BAK" ]; then mkdir -p "$DEPLOY_DIR/apps/control-server/prisma" && cp "$DB_BAK" "$DEPLOY_DIR/apps/control-server/prisma/prod.db"; fi
+if [ -f "$DB_BAK" ]; then mkdir -p "$DEPLOY_DIR/apps/control-server" && cp "$DB_BAK" "$DEPLOY_DIR/apps/control-server/prod.db"; fi
 sed -i 's/\\r$//' "$DEPLOY_DIR/deploy/aliyun/deploy.sh"
 chmod +x "$DEPLOY_DIR"/deploy/aliyun/deploy.sh
 """,

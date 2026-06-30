@@ -1,25 +1,16 @@
-import os
-import paramiko
+#!/usr/bin/env python3
+"""只读：检查 aa_nginx 状态（不 reload / 不 restart nginx）。"""
+from ops_lib import parse_fix_args, run_check_cmds
 
-PASSWORD = os.environ.get("SSH_PASS", "")
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect("8.137.126.18", username="root", password=PASSWORD, timeout=60)
+print("说明：本脚本仅只读检查 nginx 状态，不会 reload 或 restart nginx。")
+parse_fix_args("（兼容参数）nginx 状态只读检查")  # 消耗 argv，保持 fix 脚本接口一致
 
-cmds = [
-    "systemctl status aa_nginx --no-pager | head -25",
-    "ss -lntp | grep -E '4880|4790|aa_nginx'",
-    "/usr/sbin/aa_nginx -s reload 2>&1",
-    "sleep 1; ss -lntp | grep 4880",
-    "curl -sf http://127.0.0.1:4880/api/health",
-    "curl -sf http://127.0.0.1:4790/api/health",
-]
-
-for cmd in cmds:
-    print("\n>>>", cmd)
-    _, o, e = c.exec_command(cmd, timeout=60)
-    print(o.read().decode("utf-8", errors="replace"))
-    err = e.read().decode("utf-8", errors="replace")
-    if err.strip():
-        print("ERR:", err.rstrip())
-c.close()
+run_check_cmds(
+    [
+        "systemctl status aa_nginx --no-pager | head -25",
+        "ss -lntp | grep -E '4880|4790|aa_nginx'",
+        "curl -sf http://127.0.0.1:4880/api/health || echo analysis_health_fail",
+        "curl -sf http://127.0.0.1:4790/api/health || echo control_health_fail",
+    ],
+    timeout=60,
+)

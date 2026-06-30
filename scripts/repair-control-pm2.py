@@ -53,7 +53,7 @@ set -a
 source .env
 set +a
 cd apps/control-server
-export DATABASE_URL="${{DATABASE_URL:-file:./prisma/prod.db}}"
+export DATABASE_URL="${{DATABASE_URL:-file:./prod.db}}"
 npx prisma db push --accept-data-loss
 npx prisma generate
 cd {DEPLOY}

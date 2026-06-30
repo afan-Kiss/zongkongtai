@@ -38,7 +38,7 @@ export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 if [ -s /root/.nvm/nvm.sh ]; then . /root/.nvm/nvm.sh; fi
 npm install
 cd apps/control-server
-export DATABASE_URL="${DATABASE_URL:-file:./prisma/prod.db}"
+export DATABASE_URL="${DATABASE_URL:-file:./prod.db}"
 npx prisma generate
 npx prisma db push --accept-data-loss
 cd /www/wwwroot/zhubo-control-center

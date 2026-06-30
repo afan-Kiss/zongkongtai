@@ -1,52 +1,40 @@
 #!/usr/bin/env python3
-"""Fix DATABASE_URL path and consolidate prod.db to prisma/prod.db."""
-import sys
-import paramiko
-from pathlib import Path
+"""fix：将 DATABASE_URL 与 prod.db 统一到 apps/control-server/prod.db（需 --execute）。"""
+from ops_config import CONTROL_DB, CONTROL_PM2, CONTROL_ROOT, CONTROL_SERVER_DIR, LEGACY_DB
+from ops_lib import parse_fix_args, run_fix_cmds, run_ssh, ssh_session
 
-def sp(s):
-    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
-    print(s.encode(enc, errors="replace").decode(enc, errors="replace"))
+DEPLOY = CONTROL_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
-pwd = ""
-for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
-    if line.startswith("SSH_PASS="):
-        pwd = line.split("=", 1)[1].strip().strip('"').strip("'")
 
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect("8.137.126.18", username="root", password=pwd, timeout=60)
-
-DEPLOY = "/www/wwwroot/zhubo-control-center"
-PRISMA = f"{DEPLOY}/apps/control-server/prisma"
-cmd = f"""
+def main() -> None:
+    execute = parse_fix_args("统一生产库路径到 apps/control-server/prod.db")
+    planned_shell = f"""
 set -e
-# Fix .env: Prisma resolves SQLite path relative to schema dir (prisma/)
-sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:./prod.db|' {DEPLOY}/.env
-# Use nested db if it has more data than flat prod.db
-NEST="{PRISMA}/prisma/prod.db"
-FLAT="{PRISMA}/prod.db"
-if [ -f "$NEST" ]; then
-  n=$(sqlite3 "$NEST" "select count(*) from User;" 2>/dev/null || echo 0)
-  f=$(sqlite3 "$FLAT" "select count(*) from User;" 2>/dev/null || echo 0)
-  if [ "$n" -gt "$f" ] 2>/dev/null; then
-    cp "$NEST" "$FLAT"
+sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:{CONTROL_DB}|' {DEPLOY}/.env
+# 若旧路径有数据且正式库为空，从旧路径迁移（一次性）
+if [ -f "{LEGACY_DB}" ] && [ -f "{CONTROL_DB}" ]; then
+  n=$(sqlite3 "{LEGACY_DB}" "select count(*) from SecretStore;" 2>/dev/null || echo 0)
+  c=$(sqlite3 "{CONTROL_DB}" "select count(*) from SecretStore;" 2>/dev/null || echo 0)
+  if [ "$n" -gt "$c" ] 2>/dev/null; then
+    cp "{LEGACY_DB}" "{CONTROL_DB}"
+    echo "已从旧路径迁移 SecretStore 数据"
   fi
 fi
-rm -rf "{PRISMA}/prisma"
-sqlite3 "$FLAT" "select count(*) from User;"
-sqlite3 "$FLAT" "select count(*) from SecretStore;"
+sqlite3 "{CONTROL_DB}" "select count(*) from User;"
+sqlite3 "{CONTROL_DB}" "select count(*) from SecretStore;"
 grep DATABASE_URL {DEPLOY}/.env
-cd {DEPLOY}
-export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null
-pm2 restart zhubo-control-center
-sleep 2
-curl -sf http://8.137.126.18/control/api/health
+echo "注意：本脚本不自动 pm2 restart {CONTROL_PM2}，请评估后手动重启。"
 """
-_, o, e = c.exec_command(cmd, timeout=120)
-sp(o.read().decode("utf-8", errors="replace"))
-err = e.read().decode("utf-8", errors="replace")
-if err.strip():
-    sp("ERR: " + err)
-c.close()
+    print("计划：")
+    print(f"  1. 更新 {DEPLOY}/.env DATABASE_URL -> file:{CONTROL_DB}")
+    print(f"  2. 必要时从旧路径 {LEGACY_DB} 迁移")
+    print(f"  3. 不重启 nginx / x-ui / {CONTROL_PM2}（需手动）")
+    steps = [("统一 DB 路径", planned_shell)]
+    run_fix_cmds(steps, execute=execute, timeout=120)
+    if execute:
+        with ssh_session() as client:
+            run_ssh(client, f"ls -la {CONTROL_DB} {LEGACY_DB} 2>&1", timeout=15)
+
+
+if __name__ == "__main__":
+    main()

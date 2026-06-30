@@ -50,6 +50,18 @@ WebSocket：`ws://8.137.126.18/control/api/agent/ws`
 
 ## 桌面 EXE
 
+日常打包（推荐，固定输出目录，避免 pack2/pack3 堆积）：
+
+```bash
+npm run pack:desktop:clean
+```
+
+输出：`apps/control-desktop/dist-desktop-pack-current/win-unpacked/珠宝本地总控工作台.exe`
+
+若旧 EXE 仍在运行，请先关闭窗口再打包。
+
+开发调试：
+
 ```bash
 npm run build:desktop
 npm run pack:desktop
@@ -58,6 +70,12 @@ npm run pack:desktop
 输出：`apps/control-desktop/dist-desktop/win-unpacked/珠宝本地总控工作台.exe`
 
 ## 部署阿里云
+
+运维脚本公共配置：`deploy/aliyun/ops_config.py`（生产库路径 `apps/control-server/prod.db`）。
+
+- `check-*` / `diagnose-*`：只读，不修改服务器
+- `fix-*`：默认 dry-run，须加 `--execute` 才执行
+- 路径冲突排查：`python deploy/aliyun/diagnose-db-path-conflict.py`
 
 ```bash
 set SSH_PASS=你的密码

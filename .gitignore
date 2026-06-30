@@ -27,6 +27,8 @@ apps/control-desktop/dist-desktop/
 apps/control-desktop/dist-desktop-pack/
 apps/control-desktop/dist-desktop-pack2/
 apps/control-desktop/dist-desktop-pack3/
+apps/control-desktop/dist-desktop-pack-current/
+apps/control-desktop/dist-desktop-pack-temp/
 deploy/aliyun/__pycache__/
 apps/control-desktop/dist-electron/
 apps/control-desktop/dist/
