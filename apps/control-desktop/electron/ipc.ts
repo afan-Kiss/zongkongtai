@@ -204,10 +204,21 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     saveConfig(next);
 
     cloudClient.refreshConfig();
+    cloudClient.clearSession();
 
-    fileLog.app('配置已保存');
+    fileLog.app('配置已保存，已清空云端登录缓存');
 
     return { ok: true };
+  });
+
+  ipcMain.handle('config:testLogin', async (_e, partial?: Record<string, unknown>) => {
+    const current = loadConfig();
+    const username = partial?.adminUsername ? String(partial.adminUsername) : current.adminUsername;
+    let password = current.adminPassword;
+    if (partial?.adminPassword && partial.adminPassword !== '******') {
+      password = String(partial.adminPassword);
+    }
+    return cloudClient.testLogin(username, password);
   });
 
   ipcMain.handle('config:setAutoStart', (_e, enabled: boolean) => {
@@ -418,13 +429,21 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle('native:focusWindow', (_e, hwnd: number | string) => focusWindow(hwnd));
 
   ipcMain.handle('native:arrangeQianfan', async () => {
-    const win = getMainWindow();
-    const hwnd = getWindowHwnd(win);
-    const result = await arrangeQianfanWorkspace(hwnd);
-
-    fileLog.native(result.messages.join('; '));
-
-    return result;
+    try {
+      const win = getMainWindow();
+      const hwnd = getWindowHwnd(win);
+      const result = await arrangeQianfanWorkspace(hwnd);
+      fileLog.native(result.messages.join('; '));
+      return result;
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e);
+      fileLog.native(`arrangeQianfan failed: ${raw}`, 'warn');
+      return {
+        ok: false,
+        qianfanFound: false,
+        messages: ['窗口排列组件不可用，已跳过。你可以手动排列窗口。'],
+      };
+    }
   });
 
   ipcMain.handle('workspace:list', () => WORKSPACES);

@@ -31,6 +31,7 @@ export interface GitProjectStatus {
   changes: GitFileChange[];
   safeToCommitPaths: string[];
   blockedPaths: GitFileChange[];
+  riskLevel?: RiskLevel | string;
   error?: string;
 }
 

@@ -28,13 +28,58 @@ function hasGitRepo(dir: string): boolean {
 function parsePorcelain(output: string): GitFileChange[] {
   const changes: GitFileChange[] = [];
   for (const line of output.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    const status = line.slice(0, 2).trim() || '?';
-    const filePath = line.slice(3).trim();
+    if (!line.trim() || line.length < 3) continue;
+    const status = line.slice(0, 2);
+    let filePath = line.slice(2).trimStart();
     if (!filePath) continue;
-    changes.push({ path: filePath.replace(/\\/g, '/'), status });
+    if (filePath.includes(' -> ')) {
+      filePath = filePath.split(' -> ').pop()!.trim().replace(/^"|"$/g, '');
+    } else {
+      filePath = filePath.replace(/^"|"$/g, '');
+    }
+    changes.push({ path: filePath.replace(/\\/g, '/'), status: status.trim() || '?' });
   }
   return changes;
+}
+
+function validateGitAddPaths(
+  localPath: string,
+  paths: string[],
+): { valid: string[]; skipped: Array<{ path: string; reason: string }> } {
+  const valid: string[] = [];
+  const skipped: Array<{ path: string; reason: string }> = [];
+  for (const relPath of paths) {
+    const norm = relPath.replace(/\\/g, '/');
+    const full = path.join(localPath, norm);
+    if (/^ata\//.test(norm)) {
+      const alt = path.join(localPath, `d${norm}`);
+      if (fs.existsSync(alt)) {
+        fileLog.app(`[git-upload] cwd=${localPath} add=${norm} exists=false path-anomaly`, 'warn');
+        skipped.push({ path: norm, reason: '路径异常，已跳过（请刷新 Git 状态）' });
+        continue;
+      }
+    }
+    const exists = fs.existsSync(full);
+    fileLog.app(`[git-upload] cwd=${localPath} add=${norm} exists=${exists}`);
+    if (!exists) {
+      skipped.push({ path: norm, reason: '文件已不存在，已跳过' });
+      continue;
+    }
+    valid.push(norm);
+  }
+  return { valid, skipped };
+}
+
+function friendlyGitError(msg: string): string {
+  if (/pathspec.*did not match any files/i.test(msg)) {
+    return '有文件已不存在，已跳过。请刷新 Git 状态后再试。';
+  }
+  if (/rejected|non-fast-forward|fetch first/i.test(msg)) {
+    return 'push 被拒绝，远端比本地新，请先 pull';
+  }
+  if (/conflict/i.test(msg)) return '有冲突，需要先手动解决';
+  if (/path-anomaly|路径异常/i.test(msg)) return msg;
+  return msg.slice(0, 200);
 }
 
 function detectState(opts: {
@@ -81,6 +126,7 @@ export async function getGitStatusForPath(
     changes: [],
     safeToCommitPaths: [],
     blockedPaths: [],
+    riskLevel: 'medium',
   };
 
   if (!localPath || !fs.existsSync(localPath)) {
@@ -91,6 +137,10 @@ export async function getGitStatusForPath(
   }
 
   try {
+    const manifest = readProjectManifest(localPath);
+    const riskLevel = resolveRiskLevel(projectCode, manifest?.riskLevel);
+    base.riskLevel = riskLevel;
+
     const branch = await runGit(localPath, ['rev-parse', '--abbrev-ref', 'HEAD'], {
       timeoutMs: GIT_TIMEOUT_MS,
       signal,
@@ -129,13 +179,17 @@ export async function getGitStatusForPath(
     let ignoredCount = 0;
 
     const changePaths = changes.map((c) => c.path);
-    const { safe, blocked } = filterGitPaths(changePaths);
+    const { safe, blocked } = filterGitPaths(changePaths, { riskLevel });
     const blockedPaths = blocked.map((b) => ({
       path: b.path,
       status: changes.find((c) => c.path === b.path)?.status || '?',
       blocked: true,
       blockReason: b.reason,
     }));
+    const changesWithFlags = changes.map((c) => {
+      const hit = blockedPaths.find((b) => b.path === c.path);
+      return hit ? { ...c, blocked: true, blockReason: hit.blockReason } : c;
+    });
 
     let unpushed = false;
     let behind = false;
@@ -204,9 +258,10 @@ export async function getGitStatusForPath(
       modifiedCount,
       deletedCount,
       ignoredCount,
-      changes,
+      changes: changesWithFlags,
       safeToCommitPaths: safe,
       blockedPaths,
+      riskLevel,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -352,6 +407,7 @@ export interface GitCommitPushResult {
   branch?: string;
   remote?: string;
   pushed?: boolean;
+  skipped?: Array<{ path: string; reason: string }>;
 }
 
 export async function gitCommitAndPush(
@@ -380,6 +436,8 @@ export async function gitCommitAndPush(
     return { ok: false, message: '远端地址没配置' };
   }
 
+  let commitSkipped: Array<{ path: string; reason: string }> = [];
+
   if (!opts.pushOnly) {
     const porcelain = await runGit(localPath, ['status', '--porcelain'], {
       timeoutMs: GIT_TIMEOUT_MS,
@@ -389,14 +447,51 @@ export async function gitCommitAndPush(
     if (!changes.length) return { ok: false, message: '没有可提交改动' };
 
     const paths = opts.paths?.length ? opts.paths : filterGitPaths(changes.map((c) => c.path)).safe;
-    if (!paths.length) return { ok: false, message: '改动文件均在敏感列表中，已阻止提交' };
-
-    for (const p of paths) {
-      await runGit(localPath, ['add', '--', p], { timeoutMs: GIT_TIMEOUT_MS, signal });
+    const { valid, skipped } = validateGitAddPaths(localPath, paths);
+    commitSkipped = skipped;
+    if (!valid.length) {
+      const hint = skipped.length
+        ? skipped
+            .map((s) => `${s.path}（${s.reason}）`)
+            .slice(0, 3)
+            .join('；')
+        : '';
+      return {
+        ok: false,
+        message: hint ? `没有可安全提交的文件。${hint}` : '没有可安全提交的文件。',
+        skipped: commitSkipped,
+      };
     }
 
-    const msg = (opts.message || '').trim() || suggestCommitMessage(paths);
+    for (const p of valid) {
+      try {
+        await runGit(localPath, ['add', '--', p], { timeoutMs: GIT_TIMEOUT_MS, signal });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        fileLog.app(`[git-upload] add failed path=${p} ${msg}`, 'warn');
+        commitSkipped.push({ path: p, reason: friendlyGitError(msg) });
+      }
+    }
+
+    const staged = (
+      await runGit(localPath, ['diff', '--cached', '--name-only'], {
+        timeoutMs: GIT_TIMEOUT_MS,
+        signal,
+      })
+    ).trim();
+    if (!staged) {
+      return {
+        ok: false,
+        message: '没有可安全提交的文件。',
+        skipped: commitSkipped,
+      };
+    }
+
+    const msg = (opts.message || '').trim() || suggestCommitMessage(valid);
     await runGit(localPath, ['commit', '-m', msg], { timeoutMs: 10000, signal });
+    if (commitSkipped.length) {
+      fileLog.app(`[git-upload] skipped ${commitSkipped.length} paths during commit`, 'warn');
+    }
   } else {
     const unpushed = (
       await runGit(localPath, ['log', `@{u}..HEAD`, '--oneline'], {
@@ -422,7 +517,7 @@ export async function gitCommitAndPush(
     if (/rejected|non-fast-forward|fetch first/i.test(msg)) {
       return { ok: false, message: 'push 被拒绝，远端比本地新，请先 pull' };
     }
-    return { ok: false, message: msg.slice(0, 300) };
+    return { ok: false, message: friendlyGitError(msg) };
   }
 
   const commitHash = await runGit(localPath, ['rev-parse', '--short', 'HEAD'], {
@@ -431,11 +526,15 @@ export async function gitCommitAndPush(
   });
   return {
     ok: true,
-    message: `已 push 到 origin/${branch}`,
+    message:
+      commitSkipped.length > 0
+        ? `已 push 到 origin/${branch}（已跳过 ${commitSkipped.length} 个文件）`
+        : `已 push 到 origin/${branch}`,
     commitHash,
     branch,
     remote,
     pushed: true,
+    skipped: commitSkipped.length ? commitSkipped : undefined,
   };
 }
 

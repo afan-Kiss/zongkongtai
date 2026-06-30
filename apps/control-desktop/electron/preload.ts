@@ -10,6 +10,7 @@ const api = {
   config: {
     get: () => ipcRenderer.invoke('config:get'),
     save: (data: unknown) => ipcRenderer.invoke('config:save', data),
+    testLogin: (data?: unknown) => ipcRenderer.invoke('config:testLogin', data),
     setAutoStart: (enabled: boolean) => ipcRenderer.invoke('config:setAutoStart', enabled),
     openLogsDir: () => ipcRenderer.invoke('config:openLogsDir'),
     openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),

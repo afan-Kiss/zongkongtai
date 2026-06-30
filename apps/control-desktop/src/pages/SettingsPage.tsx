@@ -3,9 +3,11 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAppStore } from '@/stores/appStore';
+import { humanizeUserError } from '@/lib/userErrors';
 
 export function SettingsPage() {
   const [cfg, setCfg] = useState<any>({});
+  const [testingLogin, setTestingLogin] = useState(false);
   const pushToast = useAppStore((s) => s.pushToast);
 
   useEffect(() => {
@@ -16,7 +18,22 @@ export function SettingsPage() {
     await window.zhuboDesktop.config.save(cfg);
     const fresh = await window.zhuboDesktop.config.get();
     setCfg(fresh);
-    pushToast('success', '配置已保存');
+    pushToast('success', '已保存到本机，如需验证请点「测试登录」。');
+  };
+
+  const testLogin = async () => {
+    setTestingLogin(true);
+    try {
+      const r = (await window.zhuboDesktop.config.testLogin(cfg)) as {
+        ok: boolean;
+        message: string;
+      };
+      pushToast(r.ok ? 'success' : 'error', r.message);
+    } catch (e) {
+      pushToast('error', humanizeUserError(e instanceof Error ? e.message : String(e), 'login'));
+    } finally {
+      setTestingLogin(false);
+    }
   };
 
   const toggleAutoStart = async () => {
@@ -66,7 +83,8 @@ export function SettingsPage() {
           </label>
           <label className="block text-sm">
             <span className="text-muted-foreground">
-              管理员密码 {cfg.hasAdminPassword ? '(已配置)' : '(未配置)'}
+              云端管理员登录密码（只保存在本机，用来登录云端，不会修改服务器密码）
+              {cfg.hasAdminPassword ? ' · 已配置' : ' · 未配置'}
             </span>
             <input
               type="password"
@@ -75,6 +93,9 @@ export function SettingsPage() {
               onChange={(e) => setCfg({ ...cfg, adminPassword: e.target.value })}
             />
           </label>
+          <p className="text-xs text-muted-foreground">
+            修改云端 ADMIN_PASSWORD 需要部署服务器配置，不是在这里改。
+          </p>
           <label className="block text-sm">
             <span className="text-muted-foreground">扫描根目录</span>
             <input
@@ -88,7 +109,12 @@ export function SettingsPage() {
             Token：
             {cfg.hasServiceToken ? `已配置 (${cfg.serviceToken})` : '未配置'}
           </div>
-          <Button onClick={save}>保存配置</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={save}>保存配置</Button>
+            <Button variant="secondary" onClick={testLogin} disabled={testingLogin}>
+              {testingLogin ? '测试中…' : '测试登录'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

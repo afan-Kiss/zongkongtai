@@ -1,4 +1,4 @@
-/** Git 提交安全过滤 — 禁止敏感/构建产物进入 commit */
+/** Git 提交安全过滤 — 禁止敏感/构建产物/运行数据进入 commit */
 
 const BLOCKED_SEGMENTS = [
   'node_modules',
@@ -6,13 +6,20 @@ const BLOCKED_SEGMENTS = [
   'build',
   'dist-desktop',
   'win-unpacked',
-  'logs',
   '.git',
   '__pycache__',
   'coverage',
   '.next',
   '.turbo',
+  'data',
+  'runtime',
+  'temp',
+  'tmp',
+  'cache',
+  'logs',
 ];
+
+const ALLOWED_BASENAMES = new Set(['package.json', 'tsconfig.json', 'zhubo-control.manifest.json']);
 
 const BLOCKED_PATTERNS: Array<{ re: RegExp; reason: string }> = [
   { re: /(^|[\\/])\.env$/i, reason: '.env 含密钥，禁止提交' },
@@ -22,31 +29,62 @@ const BLOCKED_PATTERNS: Array<{ re: RegExp; reason: string }> = [
   { re: /(^|[\\/])cookie/i, reason: 'Cookie 相关文件禁止提交' },
   { re: /token/i, reason: 'Token 相关文件禁止提交' },
   { re: /password/i, reason: '密码相关文件禁止提交' },
-  { re: /\.(log)$/i, reason: '日志文件不建议提交' },
+  { re: /\.(log)$/i, reason: '日志/调试样本，默认不上传' },
+  { re: /\.(jsonl)$/i, reason: '日志/调试样本，默认不上传' },
+  { re: /sample.*\.json$/i, reason: '日志/调试样本，默认不上传' },
+  { re: /debug.*\.json$/i, reason: '日志/调试样本，默认不上传' },
   { re: /\.(pem|key|p12|pfx)$/i, reason: '证书/密钥禁止提交' },
 ];
+
+export interface GitPathFilterOptions {
+  riskLevel?: string;
+}
 
 export interface GitPathFilterResult {
   safe: string[];
   blocked: Array<{ path: string; reason: string }>;
 }
 
-export function isGitPathBlocked(relPath: string): string | null {
-  const norm = relPath.replace(/\\/g, '/');
-  for (const seg of BLOCKED_SEGMENTS) {
-    if (norm.split('/').includes(seg)) return `路径含 ${seg}，已排除`;
+function segmentBlockReason(seg: string): string {
+  if (seg === 'data') return '运行数据目录 data，默认不上传';
+  if (seg === 'logs') return '日志/调试样本，默认不上传';
+  if (seg === 'runtime' || seg === 'temp' || seg === 'tmp' || seg === 'cache') {
+    return `运行数据目录 ${seg}，默认不上传`;
   }
+  return `路径含 ${seg}，已排除`;
+}
+
+export function isGitPathBlocked(relPath: string, opts?: GitPathFilterOptions): string | null {
+  const norm = relPath.replace(/\\/g, '/');
+  const normLower = norm.toLowerCase();
+  const parts = normLower.split('/');
+  const base = parts[parts.length - 1] || '';
+
+  if (ALLOWED_BASENAMES.has(base)) return null;
+  if (/zhubo-control\.manifest\.json$/i.test(base)) return null;
+
+  for (const seg of BLOCKED_SEGMENTS) {
+    if (parts.includes(seg)) return segmentBlockReason(seg);
+  }
+
   for (const { re, reason } of BLOCKED_PATTERNS) {
     if (re.test(norm)) return reason;
   }
+
+  if (opts?.riskLevel === 'high' || opts?.riskLevel === 'protected') {
+    if (/^data\//.test(normLower) && /\.json$/i.test(base)) {
+      return '高风险项目：data 下 JSON 默认不上传';
+    }
+  }
+
   return null;
 }
 
-export function filterGitPaths(paths: string[]): GitPathFilterResult {
+export function filterGitPaths(paths: string[], opts?: GitPathFilterOptions): GitPathFilterResult {
   const safe: string[] = [];
   const blocked: Array<{ path: string; reason: string }> = [];
   for (const p of paths) {
-    const reason = isGitPathBlocked(p);
+    const reason = isGitPathBlocked(p, opts);
     if (reason) blocked.push({ path: p, reason });
     else safe.push(p);
   }

@@ -308,6 +308,34 @@ if (!pkg.scripts?.['pack:desktop:clean']) {
   failures.push('package.json missing pack:desktop:clean script');
 }
 
+const gitSecurity = read(path.join(ROOT, 'packages/control-shared/src/gitSecurity.ts'));
+if (!gitSecurity.includes("'data'") || !gitSecurity.includes('运行数据目录 data')) {
+  failures.push('gitSecurity must block data/ runtime dirs by default');
+}
+
+const gitMgrFull = read(path.join(ELECTRON, 'git-manager.ts'));
+if (!gitMgrFull.includes('validateGitAddPaths') || !gitMgrFull.includes('[git-upload]')) {
+  failures.push('git-manager must validate paths before git add with [git-upload] logs');
+}
+if (!/slice\(2\)\.trimStart\(\)/.test(gitMgrFull)) {
+  failures.push('git-manager parsePorcelain must use slice(2).trimStart() to avoid ata/ bug');
+}
+
+const programCs = read(
+  path.join(ROOT, 'apps/control-desktop/native-helper/Zhubo.NativeHelper/Program.cs'),
+);
+if (programCs.includes('MoveWindowNative') && programCs.includes('DllImport("user32.dll")')) {
+  failures.push('native helper must not DllImport MoveWindowNative from user32.dll');
+}
+
+const cloudClientSrc = read(path.join(ELECTRON, 'cloud-client.ts'));
+if (!cloudClientSrc.includes('clearSession')) {
+  failures.push('cloudClient must expose clearSession');
+}
+if (!read(path.join(ELECTRON, 'ipc.ts')).includes('config:testLogin')) {
+  failures.push('ipc must expose config:testLogin');
+}
+
 if (failures.length) {
   console.error('FAIL desktop performance acceptance:');
   for (const f of failures) console.error(' -', f);

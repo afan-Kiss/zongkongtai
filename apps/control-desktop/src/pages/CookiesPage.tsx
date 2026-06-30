@@ -10,7 +10,7 @@ import { formatRelativeTime, hashPrefix } from '@/lib/utils';
 
 import { qianfanStaleMessage } from '@/hooks/useCloudBootstrap';
 
-import { useAppStore } from '@/stores/appStore';
+import { humanizeUserError } from '@/lib/userErrors';
 
 export function CookiesPage() {
   const [shops, setShops] = useState<any[]>([]);
@@ -50,10 +50,13 @@ export function CookiesPage() {
   const arrange = async () => {
     try {
       const res = await window.zhuboDesktop.native.arrangeQianfan();
-
-      pushToast(res.qianfanFound ? 'success' : 'error', res.messages.join('；'));
+      if (res.qianfanFound) {
+        pushToast('success', res.messages.join('；'));
+      } else {
+        pushToast('info', res.messages.join('；') || '窗口排列组件不可用，已跳过。');
+      }
     } catch (e) {
-      pushToast('error', e instanceof Error ? e.message : String(e));
+      pushToast('info', humanizeUserError(e instanceof Error ? e.message : String(e), 'native'));
     }
   };
 

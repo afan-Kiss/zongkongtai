@@ -27,6 +27,35 @@ export class CloudClient {
     this.baseUrl = normalizeUrl(loadConfig().controlServerUrl);
   }
 
+  clearSession() {
+    this.cookie = '';
+    setSessionCookie('');
+  }
+
+  async testLogin(username?: string, password?: string): Promise<{ ok: boolean; message: string }> {
+    this.clearSession();
+    const cfg = loadConfig();
+    const user = username || cfg.adminUsername;
+    const pass = password || cfg.adminPassword;
+    if (!user || !pass) {
+      return { ok: false, message: '请先填写管理员账号和密码' };
+    }
+    try {
+      await this.login(user, pass);
+      await this.me();
+      return { ok: true, message: '云端登录成功' };
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e);
+      if (/401|403|invalid|password|credential|unauthorized/i.test(raw)) {
+        return {
+          ok: false,
+          message: '账号或密码不对，请确认服务器 ADMIN_PASSWORD',
+        };
+      }
+      return { ok: false, message: raw.slice(0, 200) };
+    }
+  }
+
   private async request<T>(pathname: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

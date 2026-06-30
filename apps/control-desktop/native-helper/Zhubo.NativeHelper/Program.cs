@@ -142,8 +142,8 @@ internal static class Win32
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
-    [DllImport("user32.dll")]
-    private static extern bool MoveWindowNative(IntPtr hWnd, int x, int y, int nWidth, int nHeight, bool bRepaint);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool MoveWindowWin32(IntPtr hWnd, int x, int y, int nWidth, int nHeight, bool bRepaint);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -228,7 +228,7 @@ internal static class Win32
     public static void MoveWindow(IntPtr hwnd, int x, int y, int w, int h)
     {
         ShowWindow(hwnd, SW_RESTORE);
-        MoveWindowNative(hwnd, x, y, w, h, true);
+        MoveWindowWin32(hwnd, x, y, w, h, true);
     }
 
     public static void SetForeground(IntPtr hwnd)

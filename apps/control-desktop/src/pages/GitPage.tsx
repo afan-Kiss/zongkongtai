@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
 import { GIT_UNPUSHED_CACHE_KEY } from '@/lib/projectDedup';
+import { humanizeUserError } from '@/lib/userErrors';
 
 const STATE_LABEL: Record<
   string,
@@ -28,7 +29,6 @@ const DEFAULT_COMMIT_MESSAGE = 'chore: update project changes';
 
 export function GitPage() {
   const pushToast = useAppStore((s) => s.pushToast);
-  const setPage = useAppStore((s) => s.setPage);
   const projects = useAppStore((s) => s.projects);
   const selectProject = useAppStore((s) => s.selectProject);
   const [rows, setRows] = useState<GitProjectStatus[]>([]);
@@ -121,20 +121,28 @@ export function GitPage() {
           paths: row.safeToCommitPaths,
           pushOnly,
         }),
-      )) as { ok: boolean; message: string; commitHash?: string };
+      )) as {
+        ok: boolean;
+        message: string;
+        commitHash?: string;
+        skipped?: { path: string; reason: string }[];
+      };
       if (r.ok) {
         pushToast(
           'success',
           `已上传到 GitHub${r.commitHash ? `：commit ${r.commitHash.slice(0, 7)}` : ''}`,
         );
+        if (r.skipped?.length) {
+          pushToast('info', `已跳过 ${r.skipped.length} 个文件（不存在或路径异常）`);
+        }
         setUploadTarget(null);
         setCommitMsg(DEFAULT_COMMIT_MESSAGE);
         await refresh(false);
       } else {
-        pushToast('error', r.message || '上传失败，请检查网络或 Git 配置');
+        pushToast('error', r.message || '上传失败，请刷新 Git 状态后再试');
       }
     } catch (e) {
-      pushToast('error', e instanceof Error ? e.message : String(e));
+      pushToast('error', humanizeUserError(e instanceof Error ? e.message : String(e), 'git'));
     } finally {
       setBusy(false);
     }
@@ -143,8 +151,9 @@ export function GitPage() {
   const withGit = rows.filter((r) => r.state !== 'no_git');
   const changeCount = (r: GitProjectStatus) =>
     r.addedCount + r.modifiedCount + r.deletedCount + (r.hasUncommitted ? 1 : 0);
-  const commitFileCount = (row: GitProjectStatus) =>
-    row.changes.filter((c) => !c.blocked).length || row.safeToCommitPaths?.length || 0;
+  const commitFileCount = (row: GitProjectStatus) => row.safeToCommitPaths?.length ?? 0;
+  const isHighRisk = (row: GitProjectStatus) =>
+    row.riskLevel === 'high' || row.riskLevel === 'protected';
 
   return (
     <div className="space-y-6 p-6">
@@ -277,6 +286,11 @@ export function GitPage() {
                 将要提交 {commitFileCount(uploadTarget)} 个文件 · 已拦截{' '}
                 {uploadTarget.blockedPaths.length} 个敏感文件
               </p>
+              {isHighRisk(uploadTarget) && (
+                <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-100">
+                  高风险项目，只建议上传源码和 manifest，不上传运行数据。
+                </p>
+              )}
               <textarea
                 className="mb-3 w-full rounded-md border border-border bg-background/50 p-3 text-sm"
                 rows={2}
@@ -286,32 +300,35 @@ export function GitPage() {
               />
               {uploadTarget.blockedPaths.length > 0 && (
                 <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">
-                  <div className="font-medium">已拦截的敏感文件：</div>
-                  {uploadTarget.blockedPaths.slice(0, 6).map((b) => (
+                  <div className="font-medium">已拦截的文件：</div>
+                  {uploadTarget.blockedPaths.slice(0, 8).map((b) => (
                     <div key={b.path}>
                       {b.path} — {b.blockReason}
                     </div>
                   ))}
+                  {uploadTarget.blockedPaths.length > 8 && (
+                    <div className="mt-1 text-muted-foreground">
+                      还有 {uploadTarget.blockedPaths.length - 8} 个已拦截文件
+                    </div>
+                  )}
                 </div>
               )}
-              {uploadTarget.changes.length > 0 ? (
+              {uploadTarget.safeToCommitPaths.length > 0 ? (
                 <div className="mb-4 max-h-40 overflow-auto rounded-md border border-border/50 bg-card/30 p-2 font-mono text-[11px]">
-                  {uploadTarget.changes.slice(0, 40).map((c) => (
-                    <div
-                      key={c.path}
-                      className={c.blocked ? 'text-red-400' : 'text-muted-foreground'}
-                    >
-                      [{c.status}] {c.path}
+                  {uploadTarget.safeToCommitPaths.slice(0, 40).map((p) => (
+                    <div key={p} className="text-muted-foreground">
+                      {p}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mb-4 text-sm text-muted-foreground">
-                  没有可提交的改动，或需要先 pull。
-                </p>
+                <p className="mb-4 text-sm text-muted-foreground">没有可安全提交的文件。</p>
               )}
               <div className="flex gap-2">
-                <Button disabled={busy} onClick={() => doCommitPush(uploadTarget)}>
+                <Button
+                  disabled={busy || commitFileCount(uploadTarget) === 0}
+                  onClick={() => doCommitPush(uploadTarget)}
+                >
                   <Upload className="h-4 w-4" /> 确认上传
                 </Button>
                 <Button variant="ghost" disabled={busy} onClick={() => setUploadTarget(null)}>
