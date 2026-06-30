@@ -28,6 +28,7 @@
     "control:acceptance-scan": "node scripts/acceptance-scan.mjs",
     "control:acceptance-import": "node scripts/acceptance-import.mjs",
     "control:acceptance-steward": "node scripts/acceptance-steward.mjs",
+    "control:acceptance-desktop-performance": "node scripts/acceptance-desktop-performance.mjs",
     "control:patch-risk-levels": "node scripts/patch-risk-levels.mjs"
   },
   "devDependencies": {
