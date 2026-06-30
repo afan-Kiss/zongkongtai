@@ -1,40 +1,33 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard,
-  Boxes,
   FolderKanban,
   GitBranch,
   Activity,
-  Database,
-  Rocket,
-  ListTodo,
   TerminalSquare,
   Globe,
   Network,
   Cookie,
-  AppWindow,
   Settings,
   Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import type { NavPage } from '@/types/desktop';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { findDuplicateGroups } from '@/lib/projectDedup';
+import { Button } from '@/components/ui/Button';
 
-const NAV: { id: NavPage; label: string; icon: React.ElementType }[] = [
+/** 左侧主导航 — 简洁版 */
+const MAIN_NAV: { id: NavPage; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: '总览', icon: LayoutDashboard },
-  { id: 'workspace', label: '工作区', icon: Boxes },
   { id: 'projects', label: '项目', icon: FolderKanban },
   { id: 'git', label: 'Git 上传', icon: GitBranch },
-  { id: 'health', label: '系统体检', icon: Activity },
-  { id: 'backup', label: '备份回滚', icon: Database },
-  { id: 'deploy', label: '部署记录', icon: Rocket },
-  { id: 'tasks', label: '后台任务', icon: ListTodo },
+  { id: 'health', label: '简单体检', icon: Activity },
   { id: 'terminal', label: '终端', icon: TerminalSquare },
   { id: 'web', label: 'Web 页面', icon: Globe },
   { id: 'ports', label: '端口', icon: Network },
   { id: 'cookies', label: 'Cookie', icon: Cookie },
-  { id: 'windows', label: '窗口管理', icon: AppWindow },
   { id: 'settings', label: '设置', icon: Settings },
   { id: 'about', label: '关于', icon: Info },
 ];
@@ -47,10 +40,10 @@ export function Sidebar() {
     <aside className="flex w-56 flex-col border-r border-border bg-card/40 p-3">
       <div className="mb-6 px-2">
         <div className="text-lg font-semibold tracking-tight">珠宝本地总控</div>
-        <div className="text-xs text-muted-foreground">Zhubo Desktop Control</div>
+        <div className="text-xs text-muted-foreground">简洁 · 稳定 · 好用</div>
       </div>
       <nav className="flex flex-1 flex-col gap-1">
-        {NAV.map(({ id, label, icon: Icon }) => (
+        {MAIN_NAV.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setPage(id)}
@@ -81,6 +74,43 @@ function VersionFooter() {
   );
 }
 
+function RemindersPanel({ onClose }: { onClose: () => void }) {
+  const projects = useAppStore((s) => s.projects);
+  const conflictCount = useAppStore((s) => s.conflictCount);
+  const setPage = useAppStore((s) => s.setPage);
+  const dupes = useMemo(() => findDuplicateGroups(projects), [projects]);
+  const items: string[] = [];
+  if (conflictCount > 0) items.push(`端口冲突 ${conflictCount} 个 — 请到「端口」查看`);
+  dupes.forEach((d) => items.push(`重复项目：${d}`));
+  if (items.length === 0) items.push('暂无待处理提醒');
+
+  return (
+    <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-border bg-card p-3 shadow-lg">
+      <div className="mb-2 text-sm font-medium">待处理提醒</div>
+      <ul className="space-y-1 text-xs text-muted-foreground">
+        {items.map((t) => (
+          <li key={t}>· {t}</li>
+        ))}
+      </ul>
+      <div className="mt-3 flex gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            setPage('ports');
+            onClose();
+          }}
+        >
+          看端口
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          关闭
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function TopBar() {
   const cloudConnected = useAppStore((s) => s.cloudConnected);
   const cloudMessage = useAppStore((s) => s.cloudMessage);
@@ -89,6 +119,7 @@ export function TopBar() {
   const warningCount = useAppStore((s) => s.warningCount);
   const runningCount = useAppStore((s) => s.runningCount);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
+  const [showReminders, setShowReminders] = useState(false);
 
   const agentLabel = (() => {
     if (!agentStatus) return { ok: false, text: '检查中…', warn: false };
@@ -120,7 +151,6 @@ export function TopBar() {
       ok: agentLabel.ok,
       text: agentLabel.text,
       warn: agentLabel.warn,
-      title: agentStatus ? `${agentStatus.message}\n连接：${agentStatus.serverUrl}` : undefined,
     },
     {
       label: '千帆 Cookie',
@@ -139,27 +169,37 @@ export function TopBar() {
     { label: '运行项目', ok: true, text: `${runningCount} 个`, warn: false },
   ];
 
+  const reminderTotal = warningCount + conflictCount;
+
   return (
-    <header className="flex h-12 items-center gap-4 border-b border-border px-4 text-xs">
+    <header className="relative flex h-12 items-center gap-4 border-b border-border px-4 text-xs">
       {items.map((item) => (
         <div
           key={item.label}
           className={cn('flex items-center gap-2', item.warn && !item.ok && 'animate-pulse-soft')}
-          title={item.title}
         >
           <span
             className={cn(
               'h-2 w-2 rounded-full',
-              item.ok ? 'bg-green-400' : item.warn ? 'bg-amber-400 animate-pulse' : 'bg-red-400',
+              item.ok ? 'bg-green-400' : item.warn ? 'animate-pulse bg-amber-400' : 'bg-red-400',
             )}
           />
           <span className="text-muted-foreground">{item.label}</span>
-          <span className="max-w-[180px] truncate font-medium" title={item.text}>
-            {item.text}
-          </span>
+          <span className="max-w-[180px] truncate font-medium">{item.text}</span>
         </div>
       ))}
-      {warningCount > 0 && <span className="ml-auto text-amber-400">提醒 {warningCount}</span>}
+      {reminderTotal > 0 && (
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            className="rounded-md px-2 py-1 text-amber-400 transition-colors hover:bg-amber-500/10"
+            onClick={() => setShowReminders((v) => !v)}
+          >
+            有 {reminderTotal} 条待处理提醒
+          </button>
+          {showReminders && <RemindersPanel onClose={() => setShowReminders(false)} />}
+        </div>
+      )}
     </header>
   );
 }

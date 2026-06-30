@@ -30,35 +30,39 @@ export function useTaskRunner(opts?: UseTaskRunnerOptions) {
   const acceptedTypes = opts?.acceptedTypes;
 
   useEffect(() => {
-    const isCurrent = (t: TaskRecord) => t.id === activeIdRef.current;
+    const finishWaiter = (t: TaskRecord, ok: boolean) => {
+      const w = waiters.current.get(t.id);
+      if (w) {
+        if (ok) w.resolve(t.result);
+        else w.reject(new Error(t.error || '任务失败'));
+        waiters.current.delete(t.id);
+      }
+      if (t.id === activeIdRef.current) activeIdRef.current = null;
+    };
 
     const offProgress = window.zhuboDesktop.tasks.onProgress((task) => {
       const t = task as TaskRecord;
-      if (!isCurrent(t)) return;
       if (!typeMatches(t.type, acceptedTypes)) return;
-      setActive(t);
+      if (t.id === activeIdRef.current) setActive(t);
     });
     const offDone = window.zhuboDesktop.tasks.onDone((task) => {
       const t = task as TaskRecord;
-      if (!isCurrent(t)) return;
-      setActive(t);
-      waiters.current.get(t.id)?.resolve(t.result);
-      waiters.current.delete(t.id);
-      if (t.id === activeIdRef.current) activeIdRef.current = null;
+      if (!typeMatches(t.type, acceptedTypes)) return;
+      if (t.id === activeIdRef.current) setActive(t);
+      finishWaiter(t, true);
     });
     const offFailed = window.zhuboDesktop.tasks.onFailed((task) => {
       const t = task as TaskRecord;
-      if (!isCurrent(t)) return;
-      setActive(t);
-      waiters.current.get(t.id)?.reject(new Error(t.error || '任务失败'));
-      waiters.current.delete(t.id);
-      if (t.id === activeIdRef.current) activeIdRef.current = null;
+      if (!typeMatches(t.type, acceptedTypes)) return;
+      if (t.id === activeIdRef.current) setActive(t);
+      finishWaiter(t, false);
     });
     const offCancelled = window.zhuboDesktop.tasks.onCancelled((task) => {
       const t = task as TaskRecord;
-      if (!isCurrent(t)) return;
-      setActive(t);
-      waiters.current.get(t.id)?.reject(new Error('任务已取消'));
+      if (!typeMatches(t.type, acceptedTypes)) return;
+      if (t.id === activeIdRef.current) setActive(t);
+      const w = waiters.current.get(t.id);
+      w?.reject(new Error('任务已取消'));
       waiters.current.delete(t.id);
       if (t.id === activeIdRef.current) activeIdRef.current = null;
     });
@@ -72,6 +76,7 @@ export function useTaskRunner(opts?: UseTaskRunnerOptions) {
 
   const runTask = useCallback(async (starter: () => Promise<{ taskId: string }>) => {
     const { taskId } = await starter();
+    if (!taskId) throw new Error('任务未正确启动，请稍后重试');
     activeIdRef.current = taskId;
     setActive({
       id: taskId,

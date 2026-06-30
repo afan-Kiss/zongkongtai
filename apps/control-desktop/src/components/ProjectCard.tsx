@@ -21,6 +21,7 @@ import {
   normalizeRiskLevel,
   riskRequiresConfirm,
 } from '@zhubo/control-shared';
+import { formatPortList, findDuplicateGroups } from '@/lib/projectDedup';
 
 const RISK_LABEL: Record<string, string> = {
   low: '低风险',
@@ -66,11 +67,7 @@ export function ProjectCard({ project }: { project: Project }) {
   );
   const riskGate = riskRequiresConfirm(risk);
   const isProtected = risk === 'protected';
-  const ports =
-    project.ports
-      ?.slice(0, 3)
-      .map((p) => p.port)
-      .join(', ') || '—';
+  const ports = formatPortList(project.ports, 4);
   const isRunning = status === 'running';
   const isError = status === 'error';
 
@@ -260,6 +257,10 @@ export function ProjectCard({ project }: { project: Project }) {
 export function RightPanel() {
   const selectedId = useAppStore((s) => s.selectedProjectId);
   const projects = useAppStore((s) => s.projects);
+  const cloudConnected = useAppStore((s) => s.cloudConnected);
+  const conflictCount = useAppStore((s) => s.conflictCount);
+  const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
+  const setPage = useAppStore((s) => s.setPage);
   const proc = useAppStore((s) =>
     selectedId ? useAppStore.getState().processes[selectedId] : undefined,
   );
@@ -284,9 +285,32 @@ export function RightPanel() {
   }, [project?.id]);
 
   if (!project) {
+    const dupes = findDuplicateGroups(projects);
     return (
-      <aside className="w-72 border-l border-border p-4 text-sm text-muted-foreground">
-        选择项目查看详情、端口与健康状态
+      <aside className="w-72 space-y-4 border-l border-border p-4 text-sm">
+        <h3 className="font-medium text-foreground">今日建议</h3>
+        <ul className="space-y-2 text-xs text-muted-foreground">
+          <li>
+            · 端口冲突：{conflictCount} 个{conflictCount > 0 ? '，建议到「端口」处理' : ''}
+          </li>
+          <li>· 云端：{cloudConnected ? '已连接' : '未连接'}</li>
+          <li>
+            · Cookie：
+            {qianfanCookieUpdatedAt
+              ? `${Math.max(1, Math.floor((Date.now() - Date.parse(qianfanCookieUpdatedAt)) / 60000))} 分钟前更新`
+              : '暂无记录'}
+          </li>
+          {dupes.length > 0 && <li>· 重复项目：{dupes.length} 组</li>}
+        </ul>
+        <div className="flex flex-col gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setPage('git')}>
+            Git 上传
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setPage('health')}>
+            简单体检
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">点击左侧项目卡片查看详情</p>
       </aside>
     );
   }

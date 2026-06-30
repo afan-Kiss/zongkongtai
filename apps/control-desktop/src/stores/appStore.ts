@@ -20,6 +20,7 @@ interface AppState {
   toasts: ToastItem[];
   qianfanCookieUpdatedAt: string | null;
   qianfanCookieHash: string | null;
+  showDuplicateProjects: boolean;
   setCloud: (ok: boolean, msg: string, extra?: Partial<AppState>) => void;
   setAgentStatus: (s: AgentStatus | null) => void;
   setProjects: (p: Project[]) => void;
@@ -31,6 +32,7 @@ interface AppState {
   pushToast: (type: ToastItem['type'], message: string) => void;
   removeToast: (id: string) => void;
   setQianfanCookie: (updatedAt: string | null, hash: string | null) => void;
+  setShowDuplicateProjects: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -52,6 +54,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   toasts: [],
   qianfanCookieUpdatedAt: null,
   qianfanCookieHash: null,
+  showDuplicateProjects: false,
   setCloud: (ok, msg, extra) => set({ cloudConnected: ok, cloudMessage: msg, ...extra }),
   setAgentStatus: (agentStatus) =>
     set({
@@ -77,4 +80,5 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setQianfanCookie: (updatedAt, hash) =>
     set({ qianfanCookieUpdatedAt: updatedAt, qianfanCookieHash: hash }),
+  setShowDuplicateProjects: (showDuplicateProjects) => set({ showDuplicateProjects }),
 }));

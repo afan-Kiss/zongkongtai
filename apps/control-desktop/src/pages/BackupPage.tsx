@@ -4,6 +4,7 @@ import type { BackupRecord } from '@zhubo/control-shared';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { useAppStore } from '@/stores/appStore';
+import { CloudGate } from '@/components/CloudGate';
 
 function fmtSize(n: number) {
   if (n < 1024) return `${n} B`;
@@ -67,60 +68,62 @@ export function BackupPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <Database className="h-6 w-6 text-primary" /> 备份与回滚
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            第一版：总控 prod.db · 路径 apps/control-server/prod.db
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={refresh} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button onClick={createBackup} disabled={busy}>
-            <Shield className="h-4 w-4" /> 立即备份
-          </Button>
-        </div>
-      </div>
-
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="py-4 text-sm text-muted-foreground">
-          部署前、重要修复前建议先备份。恢复时只会重启 zhubo-control-center，不会动主播分析 / nginx
-          / x-ui。
-        </CardContent>
-      </Card>
-
-      <div className="space-y-3">
-        {backups.length === 0 && !loading && (
-          <div className="text-sm text-muted-foreground">
-            暂无备份，点击「立即备份」创建第一份。
+    <CloudGate title="备份回滚（高级工具）">
+      <div className="space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="flex items-center gap-2 text-2xl font-semibold">
+              <Database className="h-6 w-6 text-primary" /> 备份与回滚
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              第一版：总控 prod.db · 路径 apps/control-server/prod.db
+            </p>
           </div>
-        )}
-        {backups.map((b) => (
-          <Card key={b.id}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <div className="font-medium">{b.label}</div>
-                <div className="text-xs text-muted-foreground">
-                  {new Date(b.createdAt).toLocaleString()} · {fmtSize(b.sizeBytes)}
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={refresh} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button onClick={createBackup} disabled={busy}>
+              <Shield className="h-4 w-4" /> 立即备份
+            </Button>
+          </div>
+        </div>
+
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            部署前、重要修复前建议先备份。恢复时只会重启 zhubo-control-center，不会动主播分析 /
+            nginx / x-ui。
+          </CardContent>
+        </Card>
+
+        <div className="space-y-3">
+          {backups.length === 0 && !loading && (
+            <div className="text-sm text-muted-foreground">
+              暂无备份，点击「立即备份」创建第一份。
+            </div>
+          )}
+          {backups.map((b) => (
+            <Card key={b.id}>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <div className="font-medium">{b.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(b.createdAt).toLocaleString()} · {fmtSize(b.sizeBytes)}
+                  </div>
                 </div>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={busy || !b.restorable}
-                onClick={() => restore(b)}
-              >
-                <RotateCcw className="h-4 w-4" /> 恢复
-              </Button>
-            </CardHeader>
-          </Card>
-        ))}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy || !b.restorable}
+                  onClick={() => restore(b)}
+                >
+                  <RotateCcw className="h-4 w-4" /> 恢复
+                </Button>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
       </div>
-    </div>
+    </CloudGate>
   );
 }

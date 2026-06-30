@@ -80,10 +80,15 @@ for (const p of ['git:', 'health:', 'backup:', 'deploy:', 'tasks:']) {
 }
 if (!app.includes('GlobalTaskBar')) failures.push('App.tsx missing GlobalTaskBar');
 
-// 7. Shell nav
+// 7. Shell nav — 简洁主导航
 const shell = read(path.join(SRC, 'components/layout/Shell.tsx'));
-for (const label of ['Git 上传', '系统体检', '备份回滚', '部署记录', '后台任务']) {
+for (const label of ['总览', '项目', 'Git 上传', '简单体检', '终端', '端口', 'Cookie', '设置']) {
   if (!shell.includes(label)) failures.push(`Shell missing ${label}`);
+}
+if (shell.includes("label: '备份回滚'") || shell.includes('label: \'备份回滚\'')) {
+  if (/MAIN_NAV[\s\S]*备份回滚/.test(shell)) {
+    failures.push('备份回滚不应出现在主导航');
+  }
 }
 
 // 8. ProjectCard protected hides start/stop/restart
@@ -95,19 +100,29 @@ if (!card.includes('{!isProtected && (')) {
   failures.push('ProjectCard protected must hide start/stop/restart buttons');
 }
 
-// 9. HealthPage no auto full on mount
+// 9. HealthPage — manual start, no auto heavy check on mount
 const healthPage = read(path.join(SRC, 'pages/HealthPage.tsx'));
-if (!/useEffect\(\(\) => \{\s*loadLight\(\)/.test(healthPage)) {
-  failures.push('HealthPage should mount with loadLight only');
+if (!healthPage.includes('开始体检') || !healthPage.includes('简单体检')) {
+  failures.push('HealthPage must be simple health with manual start button');
 }
-if (!healthPage.includes('healthCheckLight')) failures.push('HealthPage missing light check');
-
-// 10. inFlight / task
-if (!read(path.join(SRC, 'pages/OverviewPage.tsx')).includes('workdayBusy')) {
-  failures.push('OverviewPage missing workday inFlight guard');
+if (/useEffect\(\(\) => \{\s*loadLight\(\)/.test(healthPage)) {
+  failures.push('HealthPage should not auto-run loadLight on mount');
 }
 
-// 11. forbidden url — gitRemote allowed, runtime blocks github https
+// 10. OverviewPage simplified actions
+const overview = read(path.join(SRC, 'pages/OverviewPage.tsx'));
+if (!overview.includes('刷新状态') || !overview.includes('一键体检')) {
+  failures.push('OverviewPage must have refresh and quick health buttons');
+}
+if (overview.includes('今日开工') || overview.includes('今日收工')) {
+  failures.push('OverviewPage must not show workday start/end');
+}
+
+// 10b. ErrorBoundary prevents full-app black screen
+const appTsx = read(path.join(SRC, 'App.tsx'));
+if (!appTsx.includes('ErrorBoundary') || !appTsx.includes('PageErrorBoundary')) {
+  failures.push('App must wrap pages with ErrorBoundary');
+}
 const forbidden = read(path.join(ELECTRON, 'forbidden-url.ts'));
 if (!forbidden.includes('GIT_REMOTE_KEYS')) failures.push('forbidden-url missing GIT_REMOTE_KEYS');
 if (!forbidden.includes('gitRemote')) failures.push('forbidden-url should allow gitRemote github');
@@ -165,13 +180,12 @@ if (!ipc.includes("assertRiskAllowed(payload, 'stop')")) {
   failures.push('process:stop must assertRiskAllowed');
 }
 
-// 15. useTaskRunner taskId scope
+// 13. useTaskRunner resolves all waiters (concurrent tasks)
 const taskRunner = read(path.join(SRC, 'hooks/useTaskRunner.ts'));
-if (!taskRunner.includes('activeIdRef')) {
-  failures.push('useTaskRunner must track own taskId');
-}
-if (!taskRunner.includes('if (!isCurrent(t)) return')) {
-  failures.push('useTaskRunner must ignore other task events');
+if (taskRunner.includes('if (!isCurrent(t)) return') && taskRunner.includes('waiters.current.get')) {
+  if (!taskRunner.includes('finishWaiter')) {
+    failures.push('useTaskRunner must resolve waiters without blocking on activeId only');
+  }
 }
 
 // 16. git:list no default --ignored
@@ -203,6 +217,9 @@ if (!ipcSecurity.includes('assertAllowedGithubUrl')) {
 }
 if (!ipc.includes('shell:openGithub')) failures.push('ipc missing shell:openGithub');
 const gitPage = read(path.join(SRC, 'pages/GitPage.tsx'));
+if (!gitPage.includes('一键上传')) {
+  failures.push('GitPage must show one-click upload on project cards');
+}
 if (!gitPage.includes('shell.openGithub')) {
   failures.push('GitPage must use shell.openGithub');
 }
@@ -265,4 +282,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checks: 23 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: 25 }, null, 2));

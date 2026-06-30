@@ -146,6 +146,35 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <div className="font-medium">高级工具</div>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p className="text-xs">以下功能日常使用不需要，默认已从左侧菜单隐藏。</p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ['backup', '备份回滚'],
+                ['deploy', '部署记录'],
+                ['tasks', '后台任务'],
+                ['workspace', '工作区'],
+                ['windows', '窗口管理'],
+              ] as const
+            ).map(([page, label]) => (
+              <Button
+                key={page}
+                size="sm"
+                variant="secondary"
+                onClick={() => useAppStore.getState().setPage(page)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <div className="font-medium">桌面行为</div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">

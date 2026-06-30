@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { deduplicateProjects } from '@/lib/projectDedup';
 import { useAppStore } from '@/stores/appStore';
 import { formatRelativeTime, hashPrefix } from '@/lib/utils';
 
@@ -30,7 +31,7 @@ export function useCloudBootstrap() {
           window.zhuboDesktop.cloud.secrets().catch(() => []),
           window.zhuboDesktop.agent.status().catch(() => null),
         ]);
-        setProjects(projects);
+        setProjects(deduplicateProjects(projects as import('@/types/desktop').Project[]));
         if (agentSnap) setAgentStatus(agentSnap as any);
         setCloud(true, '已连接', {
           agentsOnline: (agentSnap as any)?.cloudOnline ? 1 : (conn.agentsOnline ?? 0),

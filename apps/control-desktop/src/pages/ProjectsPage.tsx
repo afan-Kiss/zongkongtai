@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
-import type { Project } from '@/types/desktop';
+import { filterDisplayProjects } from '@/lib/projectDedup';
 
 type EnrichedProject = Project & { manifestFavorite?: boolean; manifestGroup?: string };
 
@@ -18,7 +18,10 @@ function projectGroup(p: EnrichedProject): ProjectGroup {
 }
 
 export function ProjectsPage() {
-  const projects = useAppStore((s) => s.projects) as EnrichedProject[];
+  const projectsRaw = useAppStore((s) => s.projects) as EnrichedProject[];
+  const showDuplicateProjects = useAppStore((s) => s.showDuplicateProjects);
+  const setShowDuplicateProjects = useAppStore((s) => s.setShowDuplicateProjects);
+  const projects = filterDisplayProjects(projectsRaw, { showDuplicates: showDuplicateProjects });
   const setProjects = useAppStore((s) => s.setProjects);
   const pushToast = useAppStore((s) => s.pushToast);
   const [activeGroup, setActiveGroup] = useState<ProjectGroup | '全部'>('全部');
@@ -131,6 +134,14 @@ export function ProjectsPage() {
               <Upload className="h-3.5 w-3.5" />从 manifest 导入
             </Button>
           </Tooltip>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showDuplicateProjects}
+              onChange={(e) => setShowDuplicateProjects(e.target.checked)}
+            />
+            显示历史/重复项目
+          </label>
         </div>
 
         <div className="flex-1 overflow-auto p-4">
