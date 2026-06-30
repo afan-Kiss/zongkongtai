@@ -18,7 +18,7 @@ export function SettingsPage() {
     await window.zhuboDesktop.config.save(cfg);
     const fresh = await window.zhuboDesktop.config.get();
     setCfg(fresh);
-    pushToast('success', '已保存到本机，如需验证请点「测试登录」。');
+    pushToast('success', '已保存到本机。要验证账号密码，请点击测试连接。');
   };
 
   const testLogin = async () => {
@@ -28,9 +28,9 @@ export function SettingsPage() {
         ok: boolean;
         message: string;
       };
-      pushToast(r.ok ? 'success' : 'error', r.message);
+      pushToast(r.ok ? 'success' : 'info', r.message);
     } catch (e) {
-      pushToast('error', humanizeUserError(e instanceof Error ? e.message : String(e), 'login'));
+      pushToast('info', humanizeUserError(e instanceof Error ? e.message : String(e), 'cloud'));
     } finally {
       setTestingLogin(false);
     }
@@ -62,7 +62,10 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <div className="font-medium">云端连接</div>
+          <div className="font-medium">云端连接（可选）</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            本地项目管理、Git 上传、终端不需要云端登录。云端只用于 Cookie 同步、远程状态和记录。
+          </p>
         </CardHeader>
         <CardContent className="space-y-3">
           <label className="block text-sm">
@@ -74,7 +77,7 @@ export function SettingsPage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="text-muted-foreground">管理员账号</span>
+            <span className="text-muted-foreground">云端管理员账号</span>
             <input
               className="mt-1 w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
               value={cfg.adminUsername || ''}
@@ -94,7 +97,7 @@ export function SettingsPage() {
             />
           </label>
           <p className="text-xs text-muted-foreground">
-            修改云端 ADMIN_PASSWORD 需要部署服务器配置，不是在这里改。
+            这里不会修改服务器密码。修改云端 ADMIN_PASSWORD 需要改服务器配置。
           </p>
           <label className="block text-sm">
             <span className="text-muted-foreground">扫描根目录</span>
@@ -110,9 +113,9 @@ export function SettingsPage() {
             {cfg.hasServiceToken ? `已配置 (${cfg.serviceToken})` : '未配置'}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={save}>保存配置</Button>
+            <Button onClick={save}>保存到本机</Button>
             <Button variant="secondary" onClick={testLogin} disabled={testingLogin}>
-              {testingLogin ? '测试中…' : '测试登录'}
+              {testingLogin ? '测试中…' : '测试连接'}
             </Button>
           </div>
         </CardContent>

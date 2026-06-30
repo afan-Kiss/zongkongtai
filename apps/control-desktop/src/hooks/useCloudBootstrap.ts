@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { deduplicateProjects } from '@/lib/projectDedup';
+import { formatRelativeTime } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
-import { formatRelativeTime, hashPrefix } from '@/lib/utils';
 
 export function useCloudBootstrap() {
   const setCloud = useAppStore((s) => s.setCloud);
@@ -10,30 +10,49 @@ export function useCloudBootstrap() {
   const portConflictIgnoredIds = useAppStore((s) => s.portConflictIgnoredIds);
   const setQianfanCookie = useAppStore((s) => s.setQianfanCookie);
   const setAgentStatus = useAppStore((s) => s.setAgentStatus);
-  const pushToast = useAppStore((s) => s.pushToast);
 
   useEffect(() => {
-    let toastOnFail = true;
+    const loadLocalProjects = async () => {
+      try {
+        const local = await window.zhuboDesktop.projects.loadLocal();
+        if (local?.length) {
+          setProjects(deduplicateProjects(local as import('@/types/desktop').Project[]));
+        }
+      } catch {
+        /* 本地扫描失败时保留已有 projects */
+      }
+    };
+
+    const refreshPorts = async () => {
+      try {
+        const portAnalysis = await window.zhuboDesktop.ports.analyze(portConflictIgnoredIds);
+        setPortConflictAnalysis(portAnalysis);
+      } catch {
+        /* 端口检测失败不影响本地模式 */
+      }
+    };
 
     const refresh = async () => {
+      await loadLocalProjects();
+      await refreshPorts();
+
       try {
         const conn = await window.zhuboDesktop.cloud.connect();
         if (!conn.ok) {
-          setCloud(false, conn.message);
-          if (toastOnFail) {
-            pushToast('error', conn.message);
-            toastOnFail = false;
-          }
+          setCloud(false, '未连接');
+          setQianfanCookie(null, null);
           return;
         }
-        toastOnFail = false;
+
         const [projects, dash, secrets, agentSnap] = await Promise.all([
           window.zhuboDesktop.cloud.projects(),
           window.zhuboDesktop.cloud.dashboard(),
           window.zhuboDesktop.cloud.secrets().catch(() => []),
           window.zhuboDesktop.agent.status().catch(() => null),
         ]);
-        setProjects(deduplicateProjects(projects as import('@/types/desktop').Project[]));
+        if (projects?.length) {
+          setProjects(deduplicateProjects(projects as import('@/types/desktop').Project[]));
+        }
         if (agentSnap) setAgentStatus(agentSnap as any);
         const portAnalysis = await window.zhuboDesktop.ports
           .analyze(portConflictIgnoredIds)
@@ -48,9 +67,9 @@ export function useCloudBootstrap() {
           (s) => s.platform === 'qianfan' && s.keyName === 'cookie',
         );
         if (qf) setQianfanCookie(qf.updatedAt || qf.lastSeenAt, qf.cookieHash);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setCloud(false, msg);
+        else setQianfanCookie(dash?.qianfanCookieUpdatedAt ?? null, null);
+      } catch {
+        setCloud(false, '未连接');
       }
     };
 
@@ -74,17 +93,17 @@ export function useCloudBootstrap() {
     setProjects,
     setQianfanCookie,
     setAgentStatus,
-    pushToast,
     setPortConflictAnalysis,
     portConflictIgnoredIds,
   ]);
 }
 
-export function qianfanStaleMessage(updatedAt: string | null) {
-  if (!updatedAt) return '总控台还没有 Cookie 数据';
+export function qianfanStaleMessage(updatedAt: string | null, cloudConnected = true) {
+  if (!cloudConnected) return '需连接云端后查看';
+  if (!updatedAt) return '暂未收到千帆 Cookie';
   const age = Date.now() - Date.parse(updatedAt);
   if (age > 3 * 3600000) {
-    return '千帆 Cookie 超过 3 小时没更新，请检查公司电脑千帆客服台是否在线。';
+    return '千帆 Cookie 超过 3 小时没更新，请检查千帆中转机器人是否在线。';
   }
   return `Cookie 状态正常（${formatRelativeTime(updatedAt)}前更新）`;
 }

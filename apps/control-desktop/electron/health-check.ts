@@ -12,6 +12,7 @@ import { loadConfig } from './config';
 import { listGitStatusesAsync, collectGitProjects } from './git-manager';
 import { scanManifestFileForbidden } from './forbidden-url';
 import { analyzePortConflictsAsync } from './port-conflict-analyzer';
+import { loadLocalProjectsFromManifests } from './local-projects';
 
 export type HealthProgress = (step: string, progress: number, message?: string) => void;
 
@@ -47,21 +48,22 @@ function resolveProjectHealthUrl(project: {
 export async function checkCloudHealth(signal?: AbortSignal): Promise<HealthCheckItem> {
   void signal;
   try {
-    const conn = await cloudClient.connect();
+    await cloudClient.ensureLogin();
     return item({
       id: 'cloud_health',
       title: '云端总控 health',
-      status: conn.ok ? 'ok' : 'error',
-      message: conn.ok ? '云端总控正常' : conn.message || '无法连接云端',
+      status: 'ok',
+      message: '云端总控正常',
       impact: '影响项目同步、Cookie、端口登记',
       category: 'cloud',
     });
   } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
     return item({
       id: 'cloud_health',
       title: '云端总控 health',
-      status: 'error',
-      message: e instanceof Error ? e.message : String(e),
+      status: 'warn',
+      message: '云端未连接，不影响本地功能。',
       category: 'cloud',
     });
   }
@@ -125,7 +127,7 @@ export async function checkPorts(signal?: AbortSignal): Promise<HealthCheckItem>
       id: 'ports',
       title: '端口冲突',
       status: 'skipped',
-      message: '端口扫描超时或云端未连接，已跳过',
+      message: '端口扫描超时，已跳过',
       category: 'project',
     });
   }
@@ -350,6 +352,119 @@ function summarize(items: HealthCheckItem[]): HealthCheckReport {
     },
     items,
   };
+}
+
+/** 简单体检 — 本地优先，云端/Cookie 可选 */
+export async function runHealthCheckSimple(signal?: AbortSignal): Promise<HealthCheckReport> {
+  const localProjects = loadLocalProjectsFromManifests();
+  const items: HealthCheckItem[] = [
+    checkLocalManifests(),
+    await checkGitQuick(localProjects as Parameters<typeof checkGitQuick>[0], signal),
+    await checkPorts(signal),
+    checkAgentSimple(),
+    await checkCloudOptional(),
+    await checkCookieOptional(),
+  ];
+  return summarize(items);
+}
+
+export function checkLocalManifests(): HealthCheckItem {
+  const { manifests, warnings } = scanManifestsLocal();
+  return item({
+    id: 'local_manifest',
+    title: '本地项目扫描',
+    status: manifests.length >= 1 ? 'ok' : 'warn',
+    message: manifests.length
+      ? `已发现 ${manifests.length} 个本地项目${warnings.length ? `，${warnings.length} 条警告` : ''}`
+      : '未扫描到 manifest，请检查设置里的扫描根目录',
+    category: 'project',
+  });
+}
+
+export async function checkCloudOptional(): Promise<HealthCheckItem> {
+  try {
+    await cloudClient.ensureLogin();
+    return item({
+      id: 'cloud',
+      title: '云端连接',
+      status: 'ok',
+      message: '已连接',
+      category: 'cloud',
+    });
+  } catch {
+    return item({
+      id: 'cloud',
+      title: '云端连接',
+      status: 'warn',
+      message: '云端未连接，不影响本地功能。',
+      repairAction: 'nav:settings',
+      repairable: true,
+      category: 'cloud',
+    });
+  }
+}
+
+export async function checkCookieOptional(): Promise<HealthCheckItem> {
+  try {
+    await cloudClient.ensureLogin();
+    const dashboard = await cloudClient.dashboard();
+    const lastUpload = dashboard?.qianfanCookieUpdatedAt as string | undefined;
+    if (!lastUpload) {
+      return item({
+        id: 'qianfan_cookie',
+        title: 'Cookie 状态',
+        status: 'warn',
+        message: '云端已连接，但暂未收到千帆 Cookie。',
+        repairAction: 'nav:cookies',
+        repairable: true,
+        category: 'cookie',
+      });
+    }
+    const ageH = (Date.now() - Date.parse(lastUpload)) / 3600000;
+    return item({
+      id: 'qianfan_cookie',
+      title: 'Cookie 状态',
+      status: ageH <= 3 ? 'ok' : 'warn',
+      message:
+        ageH <= 3
+          ? `Cookie 正常（${Math.round(ageH * 60)} 分钟前更新）`
+          : `Cookie 已超过 ${ageH.toFixed(1)} 小时未更新`,
+      repairAction: ageH > 3 ? 'nav:cookies' : undefined,
+      repairable: ageH > 3,
+      category: 'cookie',
+    });
+  } catch {
+    return item({
+      id: 'qianfan_cookie',
+      title: 'Cookie 状态',
+      status: 'warn',
+      message: '连接云端后可查看 Cookie 状态。',
+      repairAction: 'nav:settings',
+      repairable: true,
+      category: 'cookie',
+    });
+  }
+}
+
+export function checkAgentSimple(): HealthCheckItem {
+  const agentSnap = agentManager.getSnapshot();
+  let message = agentSnap.message;
+  if (/401|403|password|密码|token|credential|unauthorized/i.test(message)) {
+    message = '需要重新连接云端（不影响本地基础功能）';
+  } else if (agentSnap.state === 'online') {
+    message = '本地 Agent 在线';
+  } else if (agentSnap.state === 'offline' && !agentSnap.localPid) {
+    message = '本地 Agent 未启动';
+  }
+  return item({
+    id: 'agent_online',
+    title: '本地 Agent',
+    status: agentSnap.state === 'online' ? 'ok' : 'warn',
+    message,
+    repairAction: 'agent:ensure',
+    repairable: agentSnap.state !== 'online',
+    category: 'agent',
+  });
 }
 
 /** 轻量体检 — 页面打开时用 */

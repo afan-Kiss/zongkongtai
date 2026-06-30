@@ -43,16 +43,19 @@ export class CloudClient {
     try {
       await this.login(user, pass);
       await this.me();
-      return { ok: true, message: '云端登录成功' };
+      return { ok: true, message: '云端连接成功。' };
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e);
       if (/401|403|invalid|password|credential|unauthorized/i.test(raw)) {
         return {
           ok: false,
-          message: '账号或密码不对，请确认服务器 ADMIN_PASSWORD',
+          message: '云端连接失败：账号或密码不对。你仍然可以使用本地项目、Git 和终端功能。',
         };
       }
-      return { ok: false, message: raw.slice(0, 200) };
+      return {
+        ok: false,
+        message: '云端连接失败。你仍然可以使用本地项目、Git 和终端功能。',
+      };
     }
   }
 

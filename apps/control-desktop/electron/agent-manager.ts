@@ -71,7 +71,10 @@ function wsUrlFromServer(serverUrl: string, token: string) {
 
 function diagnoseOffline(reason: string, cfg: ReturnType<typeof loadConfig>): string {
   const url = (cfg.controlServerUrl || '').replace(/\/$/, '');
-  if (!cfg.agentToken) return 'Agent Token 不对或未配置';
+  if (/401|403|password|密码|credential|unauthorized/i.test(reason)) {
+    return '需要重新连接云端（不影响本地 EXE 基础功能）';
+  }
+  if (!cfg.agentToken) return 'Agent Token 未配置，可在设置页填写';
   if (!url.includes('/control')) return '连接地址不是云端 /control';
   if (/4790|4791|xiangyuzhubao\.xyz|wss:\/\//i.test(url)) {
     return '连接地址使用了本地端口或域名，请改为 http://8.137.126.18/control';

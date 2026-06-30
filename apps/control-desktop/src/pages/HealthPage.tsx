@@ -25,13 +25,12 @@ const DOT: Record<string, string> = {
 };
 
 const SIMPLE_IDS = new Set([
-  'cloud',
-  'agent',
-  'qianfan-cookie',
+  'local_manifest',
+  'git_unpushed',
   'ports',
-  'projects-health',
-  'git-unpushed',
-  'duplicate-projects',
+  'agent_online',
+  'cloud',
+  'qianfan_cookie',
 ]);
 
 function normalizeReport(raw: unknown): HealthCheckReport | null {
@@ -90,8 +89,10 @@ export function HealthPage() {
     if (item.repairAction === 'dialog:portConflicts') setPortConflictOpen(true);
     else if (item.repairAction === 'nav:cookies') setPage('cookies');
     else if (item.repairAction === 'nav:git') setPage('git');
+    else if (item.repairAction === 'nav:settings') setPage('settings');
     else if (item.repairAction === 'nav:ports') setPortConflictOpen(true);
     else if (item.repairAction === 'nav:projects') setPage('projects');
+    else if (item.repairAction === 'agent:ensure') void window.zhuboDesktop.agent.ensure();
   };
 
   const summary = report?.summary ?? { ok: 0, warn: 0, error: 0, fixable: 0, skipped: 0 };
@@ -192,6 +193,7 @@ export function HealthPage() {
                   </div>
                   {(item.repairAction?.startsWith('nav:') ||
                     item.repairAction === 'dialog:portConflicts' ||
+                    item.repairAction === 'agent:ensure' ||
                     item.status !== 'ok') && (
                     <Button size="sm" variant="secondary" onClick={() => goFix(item)}>
                       去处理 <ChevronRight className="h-3 w-3" />

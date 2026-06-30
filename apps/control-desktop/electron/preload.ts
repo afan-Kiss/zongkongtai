@@ -130,6 +130,7 @@ const api = {
   projects: {
     refresh: () => ipcRenderer.invoke('projects:refresh'),
     rescanDisk: () => ipcRenderer.invoke('projects:rescanDisk'),
+    loadLocal: () => ipcRenderer.invoke('projects:loadLocal'),
   },
 
   app: {

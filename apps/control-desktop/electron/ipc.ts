@@ -41,6 +41,7 @@ import {
   getHelperStatus,
 } from './native-helper-client';
 
+import { loadLocalProjectsFromManifests } from './local-projects';
 import { WORKSPACES, runWorkspace } from './workspace-manager';
 
 import { getLogDir } from './file-logger';
@@ -68,6 +69,7 @@ import {
 import {
   runHealthCheckLight,
   runHealthCheckFull,
+  runHealthCheckSimple,
   runHealthRepair,
   runWorkdayStart,
   runWorkdayEnd,
@@ -267,12 +269,15 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
         agentsOnline: agents.filter((a: any) => a.status === 'online').length,
       };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-
-      fileLog.cloud(`连接失败: ${msg}`, 'error');
-
-      return { ok: false, message: msg };
+      const raw = e instanceof Error ? e.message : String(e);
+      fileLog.cloud(`连接失败: ${raw}`, 'error');
+      return { ok: false, message: '未连接', detail: raw.slice(0, 200) };
     }
+  });
+
+  ipcMain.handle('projects:loadLocal', () => {
+    const local = loadLocalProjectsFromManifests();
+    return enrichProjectsWithManifests(local as any[]);
   });
 
   ipcMain.handle('cloud:projects', async () => {
@@ -626,9 +631,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcMain.handle('projects:refresh', async () => {
-    await cloudClient.ensureLogin();
-    const projects = await cloudClient.projects();
-    return enrichProjectsWithManifests(projects);
+    try {
+      await cloudClient.ensureLogin();
+      const projects = await cloudClient.projects();
+      return enrichProjectsWithManifests(projects);
+    } catch {
+      return enrichProjectsWithManifests(loadLocalProjectsFromManifests() as any[]);
+    }
   });
 
   ipcPerf('projects:rescanDisk', async () => {
@@ -666,8 +675,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcPerf('git:list', async (_e, opts?: { fetchRemote?: boolean }) => {
     assertNotDuplicateTask('git:list');
-    await cloudClient.ensureLogin();
-    const projects = await cloudClient.projects();
+    let projects: any[] = [];
+    try {
+      await cloudClient.ensureLogin();
+      projects = await cloudClient.projects();
+    } catch {
+      projects = loadLocalProjectsFromManifests();
+    }
     return taskManager.startTask('git:list', '扫描 Git 状态', async ({ signal, progress }) => {
       const results = await listGitStatusesAsync(projects, {
         fetchRemote: !!opts?.fetchRemote,
@@ -737,12 +751,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     assertNotDuplicateTask('steward:healthCheck');
     return taskManager.startTask(
       'steward:healthCheck',
-      '系统完整体检',
-      async ({ signal, progress }) =>
-        runHealthCheckFull(
-          (step, pct, msg) => progress({ progress: pct, message: msg || step }),
-          signal,
-        ),
+      '系统简单体检',
+      async ({ signal, progress }) => runHealthCheckSimple(signal),
     );
   });
 

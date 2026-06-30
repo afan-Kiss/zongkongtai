@@ -270,7 +270,6 @@ export function RightPanel() {
   const cloudConnected = useAppStore((s) => s.cloudConnected);
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
-  const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
   const setPage = useAppStore((s) => s.setPage);
   const proc = useAppStore((s) =>
     selectedId ? useAppStore.getState().processes[selectedId] : undefined,
@@ -307,36 +306,47 @@ export function RightPanel() {
       <aside className="w-72 space-y-4 border-l border-border p-4 text-sm">
         <h3 className="font-medium text-foreground">今日建议</h3>
         <ul className="space-y-2 text-xs text-muted-foreground">
-          <li>
-            · 端口：
-            {portAnalysis?.seriousCount
-              ? `${portAnalysis.seriousCount} 个需处理`
-              : portAnalysis?.duplicateCount
-                ? '有重复登记，不影响使用'
-                : '正常'}
-            {portAnalysis?.seriousCount || portAnalysis?.duplicateCount ? (
+          {!cloudConnected ? (
+            <>
+              <li>· 本地功能可正常使用。</li>
+              <li>· 如需查看 Cookie，请先连接云端。</li>
+              <li>· Git 上传和项目启动不受影响。</li>
+            </>
+          ) : (
+            <li>· 云端已连接，Cookie 与远程状态可用。</li>
+          )}
+          {(portAnalysis?.seriousCount ?? 0) > 0 && (
+            <li>
+              · 有端口需要处理
               <button
                 type="button"
                 className="ml-1 text-primary underline"
                 onClick={() => setPortConflictOpen(true)}
               >
-                查看
+                查看端口冲突
               </button>
-            ) : null}
-          </li>
-          <li>· 云端：{cloudConnected ? '已连接' : '未连接'}</li>
-          <li>
-            · Cookie：
-            {qianfanCookieUpdatedAt
-              ? `${Math.max(1, Math.floor((Date.now() - Date.parse(qianfanCookieUpdatedAt)) / 60000))} 分钟前更新`
-              : '暂无记录'}
-          </li>
+            </li>
+          )}
+          {gitUnpushed > 0 && (
+            <li>
+              · 有项目未上传 Git
+              <button
+                type="button"
+                className="ml-1 text-primary underline"
+                onClick={() => setPage('git')}
+              >
+                去 Git 上传
+              </button>
+            </li>
+          )}
           {dupes.length > 0 && <li>· 重复项目：{dupes.length} 组</li>}
-          <li>
-            · Git 未上传：{gitUnpushed} 个{gitUnpushed > 0 ? '，建议到「Git 上传」处理' : ''}
-          </li>
         </ul>
         <div className="flex flex-col gap-2">
+          {!cloudConnected && (
+            <Button size="sm" variant="secondary" onClick={() => setPage('settings')}>
+              去设置云端连接
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={() => setPage('git')}>
             Git 上传
           </Button>

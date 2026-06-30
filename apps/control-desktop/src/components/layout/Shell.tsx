@@ -10,6 +10,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { cloudBarText, cloudHintMessage, cookieBarState } from '@/lib/cloudStatus';
 import { useAppStore } from '@/stores/appStore';
 import type { NavPage } from '@/types/desktop';
 import { useEffect, useState } from 'react';
@@ -71,12 +72,12 @@ function VersionFooter() {
 
 export function TopBar() {
   const cloudConnected = useAppStore((s) => s.cloudConnected);
-  const cloudMessage = useAppStore((s) => s.cloudMessage);
-  const agentStatus = useAppStore((s) => s.agentStatus);
   const portAnalysis = useAppStore((s) => s.portConflictAnalysis);
   const setPortConflictOpen = useAppStore((s) => s.setPortConflictOpen);
   const runningCount = useAppStore((s) => s.runningCount);
   const qianfanCookieUpdatedAt = useAppStore((s) => s.qianfanCookieUpdatedAt);
+  const pushToast = useAppStore((s) => s.pushToast);
+  const setPage = useAppStore((s) => s.setPage);
 
   const portLabel = portAnalysis?.topBarLabel || '端口';
   const portText = portAnalysis?.topBarText || '正常';
@@ -84,34 +85,32 @@ export function TopBar() {
   const portClickable = portAnalysis?.topBarClickable ?? false;
   const portWarn = !portOk || (portAnalysis?.duplicateCount ?? 0) > 0;
 
-  const agentLabel = (() => {
-    if (!agentStatus) return { ok: false, text: '检查中…', warn: false };
-    switch (agentStatus.state) {
-      case 'online':
-        return {
-          ok: true,
-          text:
-            agentStatus.lastHeartbeatAgeSec != null
-              ? `${agentStatus.lastHeartbeatAgeSec}秒前`
-              : '在线',
-          warn: false,
-        };
-      case 'starting':
-        return { ok: false, text: '启动中', warn: true };
-      default:
-        return { ok: false, text: agentStatus.message || '离线', warn: false };
-    }
-  })();
+  const cookie = cookieBarState(cloudConnected, qianfanCookieUpdatedAt);
 
-  const items = [
-    { label: '云端', ok: cloudConnected, text: cloudConnected ? '已连接' : cloudMessage },
-    { label: 'Agent', ok: agentLabel.ok, text: agentLabel.text, warn: agentLabel.warn },
+  const items: Array<{
+    label: string;
+    ok: boolean;
+    text: string;
+    warn?: boolean;
+    clickable?: boolean;
+    onClick?: () => void;
+  }> = [
+    { label: '本地模式', ok: true, text: '正常' },
+    {
+      label: '云端',
+      ok: cloudConnected,
+      text: cloudBarText(cloudConnected),
+      warn: !cloudConnected,
+      clickable: !cloudConnected,
+      onClick: !cloudConnected ? () => pushToast('info', cloudHintMessage()) : undefined,
+    },
     {
       label: 'Cookie',
-      ok: !!qianfanCookieUpdatedAt && Date.now() - Date.parse(qianfanCookieUpdatedAt) < 3 * 3600000,
-      text: qianfanCookieUpdatedAt
-        ? `${Math.max(1, Math.floor((Date.now() - Date.parse(qianfanCookieUpdatedAt)) / 60000))}分钟前`
-        : '无',
+      ok: cookie.ok,
+      text: cookie.text,
+      warn: cookie.warn,
+      clickable: !cloudConnected,
+      onClick: !cloudConnected ? () => setPage('settings') : undefined,
     },
     {
       label: portLabel,
