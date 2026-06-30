@@ -99,18 +99,18 @@ export function HealthPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             <Activity className="h-6 w-6 text-primary" /> 简单体检
           </h1>
-          <p className="text-sm text-muted-foreground">
-            进入页面不会自动体检，点下方按钮后再检查关键项
-          </p>
+          <p className="text-sm text-muted-foreground">点一下，检查最关键的几件事。</p>
         </div>
-        <Button onClick={runCheck} disabled={running}>
-          <Play className={`h-4 w-4 ${running ? 'animate-pulse' : ''}`} /> 开始简单体检
-        </Button>
+        {report && !running && (
+          <Button variant="secondary" onClick={runCheck}>
+            <Play className="h-4 w-4" /> 开始简单体检
+          </Button>
+        )}
       </div>
 
       {running && active && (
@@ -131,7 +131,7 @@ export function HealthPage() {
         <Card className="border-red-500/30 bg-red-500/5">
           <CardContent className="py-4 text-sm">
             <p className="text-red-300">体检失败：{loadError}</p>
-            <Button size="sm" className="mt-3" variant="secondary" onClick={runCheck}>
+            <Button size="sm" className="mt-3" onClick={runCheck}>
               <RefreshCw className="h-4 w-4" /> 重试
             </Button>
           </CardContent>
@@ -140,8 +140,11 @@ export function HealthPage() {
 
       {!report && !loadError && !running && (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            还没有体检结果，点击「开始简单体检」即可。
+          <CardContent className="flex flex-col items-center py-12 text-center text-sm">
+            <p className="text-muted-foreground">还没有体检，点击开始简单体检。</p>
+            <Button className="mt-4" onClick={runCheck}>
+              <Play className="h-4 w-4" /> 开始简单体检
+            </Button>
           </CardContent>
         </Card>
       )}

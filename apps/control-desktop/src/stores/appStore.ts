@@ -13,6 +13,7 @@ interface AppState {
   warningCount: number;
   runningCount: number;
   projects: Project[];
+  projectsRaw: Project[];
   selectedProjectId: string | null;
   processes: Record<string, ProcessInfo>;
   terminalExpanded: boolean;
@@ -47,6 +48,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   warningCount: 0,
   runningCount: 0,
   projects: [],
+  projectsRaw: [],
   selectedProjectId: null,
   processes: {},
   terminalExpanded: true,
@@ -62,7 +64,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       agentStatus,
       agentsOnline: agentStatus?.cloudOnline ? 1 : 0,
     }),
-  setProjects: (projects) => set({ projects: deduplicateProjects(projects) }),
+  setProjects: (projects) => {
+    const clean = deduplicateProjects(projects);
+    set({ projects: clean, projectsRaw: projects });
+  },
   selectProject: (id) => set({ selectedProjectId: id }),
   setProcess: (proc) =>
     set((s) => {

@@ -18,10 +18,12 @@ function projectGroup(p: EnrichedProject): ProjectGroup {
 }
 
 export function ProjectsPage() {
-  const projectsRaw = useAppStore((s) => s.projects) as EnrichedProject[];
+  const projectsClean = useAppStore((s) => s.projects) as EnrichedProject[];
+  const projectsRawStore = useAppStore((s) => s.projectsRaw) as EnrichedProject[];
   const showDuplicateProjects = useAppStore((s) => s.showDuplicateProjects);
   const setShowDuplicateProjects = useAppStore((s) => s.setShowDuplicateProjects);
-  const projects = filterDisplayProjects(projectsRaw, { showDuplicates: showDuplicateProjects });
+  const source = showDuplicateProjects ? projectsRawStore : projectsClean;
+  const projects = filterDisplayProjects(source, { showDuplicates: showDuplicateProjects });
   const setProjects = useAppStore((s) => s.setProjects);
   const pushToast = useAppStore((s) => s.pushToast);
   const [activeGroup, setActiveGroup] = useState<ProjectGroup | '全部'>('全部');

@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  GitBranch,
-  RefreshCw,
-  Upload,
-  Download,
-  FolderOpen,
-  ExternalLink,
-  FileDiff,
-  X,
-} from 'lucide-react';
+import { GitBranch, RefreshCw, Upload, ExternalLink, FileDiff, X } from 'lucide-react';
 import type { GitProjectStatus } from '@zhubo/control-shared';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, Badge } from '@/components/ui/Card';
-import { Tooltip } from '@/components/ui/Tooltip';
 import { SkeletonRow } from '@/components/TaskProgressPanel';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
 import { GIT_UNPUSHED_CACHE_KEY } from '@/lib/projectDedup';
@@ -33,19 +24,20 @@ const STATE_LABEL: Record<
   no_remote: { label: '无远端', variant: 'muted' },
 };
 
-function defaultCommitMessage(): string {
-  return 'chore: update project changes';
-}
+const DEFAULT_COMMIT_MESSAGE = 'chore: update project changes';
 
 export function GitPage() {
   const pushToast = useAppStore((s) => s.pushToast);
   const setPage = useAppStore((s) => s.setPage);
+  const projects = useAppStore((s) => s.projects);
+  const selectProject = useAppStore((s) => s.selectProject);
   const [rows, setRows] = useState<GitProjectStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [uploadTarget, setUploadTarget] = useState<GitProjectStatus | null>(null);
-  const [commitMsg, setCommitMsg] = useState('');
+  const [commitMsg, setCommitMsg] = useState(DEFAULT_COMMIT_MESSAGE);
   const { runTask } = useTaskRunner();
 
   useEffect(() => {
@@ -95,14 +87,23 @@ export function GitPage() {
     void refresh(false);
   }, []);
 
+  const focusRow = (row: GitProjectStatus) => {
+    setSelectedPath(row.localPath);
+    const match = projects.find(
+      (p) => (p.localPath && p.localPath === row.localPath) || p.name === row.projectName,
+    );
+    selectProject(match?.id ?? null);
+  };
+
   const openUpload = (row: GitProjectStatus, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (row.state === 'no_git') {
       pushToast('error', '这个项目没有 Git 仓库');
       return;
     }
+    focusRow(row);
     setUploadTarget(row);
-    setCommitMsg(defaultCommitMessage());
+    setCommitMsg(DEFAULT_COMMIT_MESSAGE);
   };
 
   const doCommitPush = async (row: GitProjectStatus, pushOnly = false) => {
@@ -110,12 +111,13 @@ export function GitPage() {
       pushToast('info', 'Git 操作进行中，请稍等');
       return;
     }
+    focusRow(row);
     setBusy(true);
     try {
       const r = (await runTask(() =>
         window.zhuboDesktop.git.commitPush({
           localPath: row.localPath,
-          message: commitMsg || defaultCommitMessage(),
+          message: commitMsg || DEFAULT_COMMIT_MESSAGE,
           paths: row.safeToCommitPaths,
           pushOnly,
         }),
@@ -126,10 +128,10 @@ export function GitPage() {
           `已上传到 GitHub${r.commitHash ? `：commit ${r.commitHash.slice(0, 7)}` : ''}`,
         );
         setUploadTarget(null);
-        setCommitMsg('');
+        setCommitMsg(DEFAULT_COMMIT_MESSAGE);
         await refresh(false);
       } else {
-        pushToast('error', r.message || '上传失败');
+        pushToast('error', r.message || '上传失败，请检查网络或 Git 配置');
       }
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
@@ -141,6 +143,8 @@ export function GitPage() {
   const withGit = rows.filter((r) => r.state !== 'no_git');
   const changeCount = (r: GitProjectStatus) =>
     r.addedCount + r.modifiedCount + r.deletedCount + (r.hasUncommitted ? 1 : 0);
+  const commitFileCount = (row: GitProjectStatus) =>
+    row.changes.filter((c) => !c.blocked).length || row.safeToCommitPaths?.length || 0;
 
   return (
     <div className="space-y-6 p-6">
@@ -149,16 +153,11 @@ export function GitPage() {
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             <GitBranch className="h-6 w-6 text-primary" /> Git 上传
           </h1>
-          <p className="text-sm text-muted-foreground">每个项目卡片上直接「一键上传」到 GitHub</p>
+          <p className="text-sm text-muted-foreground">每个项目卡片上直接点「一键上传」</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => refresh(false)} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> 刷新
-          </Button>
-          <Button variant="ghost" onClick={() => setPage('health')}>
-            检查未上传项目
-          </Button>
-        </div>
+        <Button variant="secondary" onClick={() => refresh(false)} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> 刷新
+        </Button>
       </div>
 
       {loadError && rows.length === 0 && (
@@ -181,6 +180,7 @@ export function GitPage() {
         )}
         {rows.map((row) => {
           const st = STATE_LABEL[row.state] || STATE_LABEL.dirty;
+          const selected = selectedPath === row.localPath;
           return (
             <motion.div
               key={row.localPath}
@@ -188,8 +188,14 @@ export function GitPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              <Card className="transition-colors hover:border-primary/30 hover:shadow-[0_0_20px_rgba(99,102,241,0.08)]">
-                <CardHeader className="flex flex-row items-start justify-between gap-2">
+              <Card
+                className={cn(
+                  'cursor-pointer transition-colors hover:border-primary/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.08)]',
+                  selected && 'border-primary/50 ring-1 ring-primary/30',
+                )}
+                onClick={() => focusRow(row)}
+              >
+                <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
                   <div>
                     <div className="font-medium">{row.projectName}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
@@ -204,8 +210,12 @@ export function GitPage() {
                       {row.gitRemote}
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="flex flex-wrap gap-2 border-t border-border/50 pt-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Button
+                      className="min-w-[7.5rem] font-medium shadow-sm"
                       disabled={busy || row.state === 'no_git'}
                       onClick={(e) => openUpload(row, e)}
                     >
@@ -219,7 +229,7 @@ export function GitPage() {
                     >
                       仅 push
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => openUpload(row)}>
+                    <Button size="sm" variant="ghost" onClick={(e) => openUpload(row, e)}>
                       <FileDiff className="h-3 w-3" /> 查看改动
                     </Button>
                     <Button
@@ -232,13 +242,6 @@ export function GitPage() {
                       }}
                     >
                       <ExternalLink className="h-3 w-3" /> GitHub
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => window.zhuboDesktop.shell.openPath(row.localPath)}
-                    >
-                      <FolderOpen className="h-3 w-3" />
                     </Button>
                   </div>
                 </CardContent>
@@ -271,11 +274,8 @@ export function GitPage() {
                 </button>
               </div>
               <p className="mb-3 text-sm text-muted-foreground">
-                将要提交{' '}
-                {uploadTarget.changes.filter((c) => !c.blocked).length ||
-                  uploadTarget.safeToCommitPaths?.length ||
-                  0}{' '}
-                个文件 · 已拦截 {uploadTarget.blockedPaths.length} 个敏感文件
+                将要提交 {commitFileCount(uploadTarget)} 个文件 · 已拦截{' '}
+                {uploadTarget.blockedPaths.length} 个敏感文件
               </p>
               <textarea
                 className="mb-3 w-full rounded-md border border-border bg-background/50 p-3 text-sm"
@@ -314,30 +314,8 @@ export function GitPage() {
                 <Button disabled={busy} onClick={() => doCommitPush(uploadTarget)}>
                   <Upload className="h-4 w-4" /> 确认上传
                 </Button>
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => doCommitPush(uploadTarget, true)}
-                >
-                  仅 push
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      const r = (await runTask(() =>
-                        window.zhuboDesktop.git.pull(uploadTarget.localPath),
-                      )) as { ok: boolean; message: string };
-                      pushToast(r.ok ? 'success' : 'error', r.message);
-                      if (r.ok) await refresh(false);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  <Download className="h-4 w-4" /> pull
+                <Button variant="ghost" disabled={busy} onClick={() => setUploadTarget(null)}>
+                  取消
                 </Button>
               </div>
             </motion.div>

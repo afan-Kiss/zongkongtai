@@ -97,8 +97,15 @@ if (shell.includes('提醒') || /warningCount/.test(shell)) {
 
 // 7b. appStore global dedupe
 const appStore = read(path.join(SRC, 'stores/appStore.ts'));
-if (!appStore.includes('deduplicateProjects')) {
-  failures.push('appStore.setProjects must deduplicateProjects');
+if (
+  !/setProjects:\s*\(projects\)\s*=>\s*\{[\s\S]*deduplicateProjects/.test(appStore) &&
+  !/setProjects:\s*\(projects\)\s*=>\s*set\(\{\s*projects:\s*deduplicateProjects/.test(appStore)
+) {
+  failures.push('appStore.setProjects must use deduplicateProjects');
+}
+const mainNavIds = shell.match(/id:\s*'[^']+'/g) || [];
+if (mainNavIds.length !== 8) {
+  failures.push(`Shell MAIN_NAV must have exactly 8 items, found ${mainNavIds.length}`);
 }
 const bootstrap = read(path.join(SRC, 'hooks/useCloudBootstrap.ts'));
 if (!bootstrap.includes('deduplicateProjects')) {
@@ -114,13 +121,19 @@ if (!card.includes('{!isProtected && (')) {
   failures.push('ProjectCard protected must hide start/stop/restart buttons');
 }
 
-// 9. HealthPage — manual start, no auto heavy check on mount
+// 9. HealthPage — manual start, no auto loadLight
 const healthPage = read(path.join(SRC, 'pages/HealthPage.tsx'));
 if (!healthPage.includes('开始简单体检') || !healthPage.includes('简单体检')) {
   failures.push('HealthPage must be simple health with manual start button');
 }
+if (healthPage.includes('系统体检') || healthPage.includes('完整体检') || healthPage.includes('轻量检查')) {
+  failures.push('HealthPage must not use complex health labels');
+}
+if (/useEffect\(\(\) => \{\s*loadLight/.test(healthPage)) {
+  failures.push('HealthPage must not auto-run loadLight on mount');
+}
 if (/useEffect\(\(\) => \{\s*(loadLight|healthCheckLight)\(/.test(healthPage)) {
-  failures.push('HealthPage should not auto-run loadLight on mount');
+  failures.push('HealthPage should not auto-run healthCheckLight on mount');
 }
 
 // 10. OverviewPage simplified actions
@@ -231,11 +244,8 @@ if (!ipcSecurity.includes('assertAllowedGithubUrl')) {
 }
 if (!ipc.includes('shell:openGithub')) failures.push('ipc missing shell:openGithub');
 const gitPage = read(path.join(SRC, 'pages/GitPage.tsx'));
-if (!gitPage.includes('一键上传')) {
-  failures.push('GitPage must show one-click upload on project cards');
-}
-if (!/项目卡片|每个项目卡片/.test(gitPage)) {
-  failures.push('GitPage should document card-level upload buttons');
+if (!/rows\.map\([\s\S]*一键上传/.test(gitPage)) {
+  failures.push('GitPage project cards must include 一键上传 in rows.map');
 }
 if (!gitPage.includes('shell.openGithub')) {
   failures.push('GitPage must use shell.openGithub');

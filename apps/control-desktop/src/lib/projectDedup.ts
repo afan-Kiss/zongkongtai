@@ -56,9 +56,8 @@ export function filterDisplayProjects(
   projects: Project[],
   opts: { showDuplicates?: boolean },
 ): Project[] {
-  const deduped = deduplicateProjects(projects);
-  if (opts.showDuplicates) return deduped;
-  return deduped.filter((p) => !isProbeOrStale(p));
+  if (opts.showDuplicates) return projects;
+  return deduplicateProjects(projects).filter((p) => !isProbeOrStale(p));
 }
 
 export function dailyFeaturedProjects(projects: Project[]): Project[] {
