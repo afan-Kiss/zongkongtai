@@ -40,7 +40,7 @@ if (!overview.includes('本地总控')) failures.push('OverviewPage must have �
 if (!overview.includes('云端同步')) failures.push('OverviewPage must have 云端同步 card');
 
 const cookies = read(path.join(SRC, 'pages/CookiesPage.tsx'));
-if (!cookies.includes('Cookie 状态需要连接云端后查看')) {
+if (!cookies.includes('Cookie 同步需要连接云端')) {
   failures.push('CookiesPage disconnected must show cloud required message');
 }
 if (cookies.includes('总控台还没有 Cookie 数据')) {

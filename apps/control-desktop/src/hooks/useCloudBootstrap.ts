@@ -102,8 +102,11 @@ export function qianfanStaleMessage(updatedAt: string | null, cloudConnected = t
   if (!cloudConnected) return '需连接云端后查看';
   if (!updatedAt) return '暂未收到千帆 Cookie';
   const age = Date.now() - Date.parse(updatedAt);
-  if (age > 3 * 3600000) {
-    return '千帆 Cookie 超过 3 小时没更新，请检查千帆中转机器人是否在线。';
+  if (age > 6 * 3600000) {
+    return 'Cookie 超过 6 小时没更新，建议立即同步。';
+  }
+  if (age > 2 * 3600000) {
+    return 'Cookie 即将过期，建议点立即同步。';
   }
   return `Cookie 状态正常（${formatRelativeTime(updatedAt)}前更新）`;
 }

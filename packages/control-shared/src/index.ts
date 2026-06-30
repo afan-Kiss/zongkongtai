@@ -39,5 +39,7 @@ export {
   resolveQianfanShopIdentity,
   buildQianfanShopCards,
   listArchivedOrTestSecrets,
+  qianfanCookieFreshness,
+  qianfanCookieStatusLabel,
 } from './qianfanShops';
-export type { QianfanCanonicalShop, QianfanShopCard } from './qianfanShops';
+export type { QianfanCanonicalShop, QianfanShopCard, QianfanCookieFreshness } from './qianfanShops';

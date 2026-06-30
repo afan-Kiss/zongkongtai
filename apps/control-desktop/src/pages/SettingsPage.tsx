@@ -8,7 +8,10 @@ import { humanizeUserError } from '@/lib/userErrors';
 export function SettingsPage() {
   const [cfg, setCfg] = useState<any>({});
   const [testingLogin, setTestingLogin] = useState(false);
+  const [testingRelay, setTestingRelay] = useState(false);
+  const [relayStatus, setRelayStatus] = useState('');
   const pushToast = useAppStore((s) => s.pushToast);
+  const projects = useAppStore((s) => s.projects);
 
   useEffect(() => {
     window.zhuboDesktop.config.get().then(setCfg);
@@ -41,6 +44,26 @@ export function SettingsPage() {
     await window.zhuboDesktop.config.setAutoStart(next);
     setCfg({ ...cfg, autoStart: next });
     pushToast('success', next ? '已开启开机自启' : '已关闭开机自启');
+  };
+
+  const testRelay = async () => {
+    setTestingRelay(true);
+    try {
+      const r = await window.zhuboDesktop.cookie.testRelay(cfg.qianfanRelayUrl);
+      setRelayStatus(r.message);
+      pushToast(r.ok ? 'success' : 'info', r.message);
+    } finally {
+      setTestingRelay(false);
+    }
+  };
+
+  const openRelayProject = () => {
+    const relay = projects.find((p) => p.code === 'qianfan-relay' || p.name.includes('千帆中转'));
+    if (relay?.localPath) {
+      window.zhuboDesktop.shell.openPath(relay.localPath);
+    } else {
+      pushToast('info', '未找到千帆中转机器人项目');
+    }
   };
 
   return (
@@ -116,6 +139,34 @@ export function SettingsPage() {
             <Button onClick={save}>保存到本机</Button>
             <Button variant="secondary" onClick={testLogin} disabled={testingLogin}>
               {testingLogin ? '测试中…' : '测试连接'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="font-medium">Cookie 同步配置</div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <label className="block text-sm">
+            <span className="text-muted-foreground">千帆中转机器人地址</span>
+            <input
+              className="mt-1 w-full rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-sm"
+              value={cfg.qianfanRelayUrl || 'http://127.0.0.1:9323'}
+              onChange={(e) => setCfg({ ...cfg, qianfanRelayUrl: e.target.value })}
+            />
+          </label>
+          <p className="text-xs text-muted-foreground">
+            {relayStatus ||
+              '用于「立即同步 Cookie」。千帆客服台 DevTools 端口为 9322，本地 API 默认为 9323。'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={testRelay} disabled={testingRelay}>
+              {testingRelay ? '测试中…' : '测试千帆连接'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={openRelayProject}>
+              打开千帆中转机器人项目
             </Button>
           </div>
         </CardContent>

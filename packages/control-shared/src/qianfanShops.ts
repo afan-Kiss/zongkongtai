@@ -80,16 +80,53 @@ export function resolveQianfanShopIdentity(raw: string): {
   return { rawShopName, canonicalShopName, isTest };
 }
 
+export type QianfanCookieFreshness = 'missing' | 'normal' | 'expiring' | 'stale' | 'cloud_required';
+
+const TWO_HOURS_MS = 2 * 3600000;
+const SIX_HOURS_MS = 6 * 3600000;
+
+export function qianfanCookieFreshness(
+  updatedAt?: string | null,
+  found = true,
+  cloudConnected = true,
+): QianfanCookieFreshness {
+  if (!cloudConnected) return 'cloud_required';
+  if (!found || !updatedAt) return 'missing';
+  const ageMs = Date.now() - Date.parse(String(updatedAt));
+  if (ageMs <= TWO_HOURS_MS) return 'normal';
+  if (ageMs <= SIX_HOURS_MS) return 'expiring';
+  return 'stale';
+}
+
+export function qianfanCookieStatusLabel(freshness: QianfanCookieFreshness): string {
+  switch (freshness) {
+    case 'normal':
+      return '正常';
+    case 'expiring':
+      return '即将过期';
+    case 'stale':
+      return '超时';
+    case 'missing':
+      return '未收到';
+    case 'cloud_required':
+      return '需连接云端';
+    default:
+      return '未知';
+  }
+}
+
 export interface QianfanShopCard {
   shopName: QianfanCanonicalShop;
   found: boolean;
   rawShopName?: string | null;
   canonicalShopName: QianfanCanonicalShop;
   status?: string;
+  freshness?: QianfanCookieFreshness;
   updatedAt?: string | null;
   stale: boolean;
   source: string;
   cookieHash?: string | null;
+  cookieLength?: number | null;
   id?: string | null;
   shopId?: string | null;
   accountName?: string | null;
@@ -112,7 +149,7 @@ export function buildQianfanShopCards(secrets: Array<Record<string, unknown>>): 
       );
 
     const updatedAt = (row?.updatedAt || row?.lastSeenAt) as string | null | undefined;
-    const ageMs = updatedAt ? Date.now() - Date.parse(String(updatedAt)) : null;
+    const freshness = qianfanCookieFreshness(updatedAt, !!row);
 
     return {
       shopName,
@@ -121,11 +158,13 @@ export function buildQianfanShopCards(secrets: Array<Record<string, unknown>>): 
       rawShopName:
         (row?.rawShopName as string) ||
         (row?.shopName !== shopName ? (row?.shopName as string) : null),
-      status: (row?.status as string) || (row ? 'unknown' : 'missing'),
+      status: (row?.status as string) || qianfanCookieStatusLabel(freshness),
       updatedAt: updatedAt ? String(updatedAt) : null,
-      stale: ageMs != null ? ageMs > 3 * 3600000 : true,
+      stale: freshness === 'stale' || freshness === 'expiring',
+      freshness,
       source: String(row?.lastUploadedBy || row?.collectorSource || '千帆中转机器人'),
       cookieHash: (row?.cookieHash as string) || null,
+      cookieLength: (row?.cookieLength as number) || null,
       id: (row?.id as string) || null,
       shopId: (row?.shopId as string) || null,
       accountName: (row?.accountName as string) || null,

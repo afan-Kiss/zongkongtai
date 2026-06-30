@@ -131,6 +131,23 @@ export class CloudClient {
     return this.request<{ shops: any[]; archived: any[] }>(`/api/secrets/qianfan/shops${qs}`);
   }
 
+  async qianfanShopsWithServiceToken(includeArchived = false) {
+    const cfg = loadConfig();
+    const token = cfg.serviceToken?.trim();
+    if (!token) throw new Error('未配置 Service Token');
+    const qs = includeArchived ? '?includeArchived=1' : '';
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'x-service-token': token,
+    };
+    const res = await fetch(`${this.baseUrl}/api/secrets/qianfan/shops${qs}`, { headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((data as { error?: string }).error || `请求失败 ${res.status}`);
+    }
+    return data as { shops: any[]; archived: any[] };
+  }
+
   async operations() {
     return this.request<any[]>('/api/dashboard/operations');
   }

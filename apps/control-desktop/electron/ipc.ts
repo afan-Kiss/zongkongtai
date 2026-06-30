@@ -75,6 +75,14 @@ import {
   runWorkdayEnd,
 } from './health-check';
 import { taskManager } from './task-manager';
+import {
+  syncCookieViaRelay,
+  testQianfanRelay,
+  pasteUploadCookie,
+  startQianfanRelay,
+  fetchRelayAutoStatus,
+  qianfanShopsForDesktop,
+} from './cookie-sync';
 import { wrapIpcHandler } from './ipc-perf';
 import {
   assertAllowedExternalUrl,
@@ -552,14 +560,31 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   }));
 
   ipcMain.handle('cloud:qianfanShops', async (_e, opts?: { includeArchived?: boolean }) => {
-    await cloudClient.ensureLogin();
     try {
-      return await cloudClient.qianfanShops(!!opts?.includeArchived);
+      return await qianfanShopsForDesktop(!!opts?.includeArchived);
     } catch {
-      const secrets = await cloudClient.secrets();
+      const secrets = await cloudClient.secrets().catch(() => []);
       return { shops: buildQianfanShopCards(secrets as any[]), archived: [] };
     }
   });
+
+  ipcMain.handle('cookie:testRelay', async (_e, url?: string) => testQianfanRelay(url));
+
+  ipcMain.handle('cookie:relayStatus', async (_e, url?: string) => fetchRelayAutoStatus(url));
+
+  ipcMain.handle('cookie:syncNow', async (_e, url?: string) => syncCookieViaRelay(url));
+
+  ipcMain.handle('cookie:startRelay', () => startQianfanRelay());
+
+  ipcMain.handle(
+    'cookie:pasteUpload',
+    async (_e, payload: { shopName: string; cookie: string }) => {
+      if (!payload?.shopName || !payload?.cookie) {
+        return { ok: false, hash8: '', length: 0, message: '请填写店铺和 Cookie' };
+      }
+      return pasteUploadCookie(payload.shopName, payload.cookie);
+    },
+  );
 
   ipcMain.handle('cloud:openSecretsPage', () => {
     const base = loadConfig().controlServerUrl.replace(/\/$/, '');

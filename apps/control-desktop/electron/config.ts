@@ -11,6 +11,7 @@ export interface DesktopConfig {
   agentToken: string;
   serviceToken: string;
   scanRoot: string;
+  qianfanRelayUrl: string;
   importedFromCredentials?: boolean;
   configVersion?: number;
 }
@@ -40,6 +41,7 @@ const DEFAULTS: DesktopConfig = {
   agentToken: '',
   serviceToken: '',
   scanRoot: 'E:\\我的软件源码',
+  qianfanRelayUrl: 'http://127.0.0.1:9323',
   configVersion: CONFIG_VERSION,
 };
 
@@ -77,6 +79,7 @@ function toStored(cfg: DesktopConfig): StoredConfig {
     controlServerUrl: cfg.controlServerUrl,
     adminUsername: cfg.adminUsername,
     scanRoot: cfg.scanRoot,
+    qianfanRelayUrl: cfg.qianfanRelayUrl,
     importedFromCredentials: cfg.importedFromCredentials,
     configVersion: CONFIG_VERSION,
   };

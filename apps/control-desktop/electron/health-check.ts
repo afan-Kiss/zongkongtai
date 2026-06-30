@@ -6,6 +6,7 @@ import type {
 } from '../../../packages/control-shared/src/steward';
 import { cloudClient } from './cloud-client';
 import { agentManager } from './agent-manager';
+import { testQianfanRelay } from './cookie-sync';
 import { inspectLegacy4791Async, closeLegacy4791 } from './port-4791';
 import { getScanRoot, scanManifestsLocal, readProjectManifest } from './manifest-scanner';
 import { loadConfig } from './config';
@@ -405,40 +406,70 @@ export async function checkCloudOptional(): Promise<HealthCheckItem> {
 }
 
 export async function checkCookieOptional(): Promise<HealthCheckItem> {
+  const relay = await testQianfanRelay();
   try {
-    await cloudClient.ensureLogin();
-    const dashboard = await cloudClient.dashboard();
-    const lastUpload = dashboard?.qianfanCookieUpdatedAt as string | undefined;
-    if (!lastUpload) {
+    const data = await cloudClient.qianfanShops().catch(async () => {
+      const cfg = loadConfig();
+      if (!cfg.serviceToken?.trim()) throw new Error('no token');
+      return cloudClient.qianfanShopsWithServiceToken();
+    });
+    const shops = (data.shops || []) as Array<{
+      found?: boolean;
+      updatedAt?: string;
+      stale?: boolean;
+    }>;
+    const found = shops.filter((s) => s.found);
+    const staleCount = found.filter((s) => s.stale).length;
+    const missing = 4 - found.length;
+
+    if (!relay.ok) {
       return item({
         id: 'qianfan_cookie',
-        title: 'Cookie 状态',
+        title: 'Cookie 同步',
         status: 'warn',
-        message: '云端已连接，但暂未收到千帆 Cookie。',
+        message: '千帆中转机器人未运行，自动同步不可用。',
         repairAction: 'nav:cookies',
         repairable: true,
         category: 'cookie',
       });
     }
-    const ageH = (Date.now() - Date.parse(lastUpload)) / 3600000;
+    if (found.length >= 4 && staleCount === 0) {
+      return item({
+        id: 'qianfan_cookie',
+        title: 'Cookie 同步',
+        status: 'ok',
+        message: '四店 Cookie 正常。',
+        category: 'cookie',
+      });
+    }
+    if (missing > 0) {
+      return item({
+        id: 'qianfan_cookie',
+        title: 'Cookie 同步',
+        status: 'warn',
+        message: '有店铺 Cookie 未收到，请打开千帆客服台后点立即同步 Cookie。',
+        repairAction: 'nav:cookies',
+        repairable: true,
+        category: 'cookie',
+      });
+    }
     return item({
       id: 'qianfan_cookie',
-      title: 'Cookie 状态',
-      status: ageH <= 3 ? 'ok' : 'warn',
-      message:
-        ageH <= 3
-          ? `Cookie 正常（${Math.round(ageH * 60)} 分钟前更新）`
-          : `Cookie 已超过 ${ageH.toFixed(1)} 小时未更新`,
-      repairAction: ageH > 3 ? 'nav:cookies' : undefined,
-      repairable: ageH > 3,
+      title: 'Cookie 同步',
+      status: 'warn',
+      message: 'Cookie 太久没更新，建议立即同步。',
+      repairAction: 'nav:cookies',
+      repairable: true,
       category: 'cookie',
     });
   } catch {
     return item({
       id: 'qianfan_cookie',
-      title: 'Cookie 状态',
+      title: 'Cookie 同步',
       status: 'warn',
-      message: '连接云端后可查看 Cookie 状态。',
+      message: relay.ok
+        ? '连接云端后可查看 Cookie 状态。'
+        : '连接云端后可查看 Cookie 状态；千帆中转机器人未运行。',
       repairAction: 'nav:settings',
       repairable: true,
       category: 'cookie',

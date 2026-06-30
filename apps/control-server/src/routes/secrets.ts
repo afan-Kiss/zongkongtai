@@ -8,7 +8,11 @@ import { encryptSecret, previewSecret, decryptSecret } from '../lib/crypto';
 
 import { requireAuth, getActor, getClientIp } from '../middleware/auth';
 
-import { requireServiceToken, extractServiceToken } from '../middleware/serviceToken';
+import {
+  requireServiceToken,
+  extractServiceToken,
+  requireServiceTokenOrAuth,
+} from '../middleware/serviceToken';
 
 import { writeOperationLog } from '../services/operationLog';
 
@@ -74,7 +78,7 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(secrets.map((s) => sanitizeSecret(s as unknown as Record<string, unknown>)));
 });
 
-router.get('/qianfan/shops', requireAuth, async (req, res) => {
+router.get('/qianfan/shops', requireServiceTokenOrAuth, async (req, res) => {
   const includeArchived = req.query.includeArchived === '1';
 
   const secrets = await prisma.secretStore.findMany({
