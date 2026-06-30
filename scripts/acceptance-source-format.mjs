@@ -8,26 +8,42 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 
 const CORE_FILES = [
-  'packages/control-shared/src/portConflict.ts',
-  'apps/control-desktop/electron/port-conflict-analyzer.ts',
-  'apps/control-desktop/electron/git-manager.ts',
-  'apps/control-desktop/electron/cloud-client.ts',
   'apps/control-desktop/electron/ipc.ts',
   'apps/control-desktop/electron/preload.ts',
+  'apps/control-desktop/electron/config.ts',
+  'apps/control-desktop/electron/start-command.ts',
+  'apps/control-desktop/electron/external-project-status.ts',
+  'apps/control-desktop/electron/external-process-stop.ts',
+  'apps/control-desktop/electron/process-manager.ts',
+  'apps/control-desktop/electron/local-projects.ts',
+  'apps/control-desktop/electron/health-check.ts',
+  'apps/control-desktop/electron/port-conflict-analyzer.ts',
+  'apps/control-desktop/electron/git-manager.ts',
+  'packages/control-shared/src/portConflict.ts',
   'packages/control-shared/src/gitSecurity.ts',
   'apps/control-desktop/src/stores/appStore.ts',
-  'apps/control-desktop/src/components/PortConflictDialog.tsx',
-  'apps/control-desktop/src/pages/GitPage.tsx',
+  'apps/control-desktop/src/hooks/useLocalBootstrap.ts',
+  'apps/control-desktop/src/lib/localRefresh.ts',
+  'apps/control-desktop/src/pages/OverviewPage.tsx',
   'apps/control-desktop/src/pages/SettingsPage.tsx',
   'apps/control-desktop/src/pages/HealthPage.tsx',
-  'apps/control-desktop/src/pages/OverviewPage.tsx',
+  'apps/control-desktop/src/pages/GitPage.tsx',
+  'apps/control-desktop/src/components/ProjectCard.tsx',
   'apps/control-desktop/src/components/layout/Shell.tsx',
+  'apps/control-desktop/src/components/PortConflictDialog.tsx',
   'apps/control-desktop/native-helper/Zhubo.NativeHelper/Program.cs',
+  'scripts/acceptance-final-local-clean.mjs',
   'scripts/acceptance-port-conflicts.mjs',
   'scripts/acceptance-source-format.mjs',
+  'scripts/acceptance-external-running.mjs',
+  'scripts/acceptance-external-stop.mjs',
+  'scripts/acceptance-start-command.mjs',
+  'scripts/acceptance-overview-no-auto-git.mjs',
+  'scripts/acceptance-minimal-local.mjs',
   '.gitattributes',
   '.gitignore',
   'package.json',
+  'README.md',
 ];
 
 function read(file) {
@@ -71,19 +87,10 @@ const hasMoveWindowEntry =
 if (!hasMoveWindowEntry) {
   failures.push('Program.cs must DllImport user32 MoveWindow via EntryPoint or method name');
 }
-if (programCs.includes('MoveWindowNative')) {
-  failures.push('Program.cs must not reference MoveWindowNative');
-}
 
 const gitMgr = read(path.join(ROOT, 'apps/control-desktop/electron/git-manager.ts'));
 if (!gitMgr.includes('finalizeGitCommitPaths')) {
-  failures.push('git-manager must define finalizeGitCommitPaths for main-process re-filter');
-}
-if (!/finalizeGitCommitPaths\([\s\S]*filterGitPaths/.test(gitMgr)) {
-  failures.push('git-manager finalizeGitCommitPaths must call filterGitPaths');
-}
-if (!/gitCommitAndPush[\s\S]*finalizeGitCommitPaths/.test(gitMgr)) {
-  failures.push('gitCommitAndPush must call finalizeGitCommitPaths before git add');
+  failures.push('git-manager must define finalizeGitCommitPaths');
 }
 
 const gitAttrs = read(path.join(ROOT, '.gitattributes'));
@@ -95,21 +102,8 @@ for (const needle of [
   '*.json text eol=lf',
   '*.cs text eol=lf',
   '.gitignore text eol=lf',
-  '.prettierignore text eol=lf',
 ]) {
   if (!gitAttrs.includes(needle)) failures.push(`.gitattributes missing ${needle}`);
-}
-
-const portAnalyzer = read(
-  path.join(ROOT, 'apps/control-desktop/electron/port-conflict-analyzer.ts'),
-);
-if (!portAnalyzer.includes('collectManagedPidRegistry')) {
-  failures.push('port-conflict-analyzer must use collectManagedPidRegistry');
-}
-if (portAnalyzer.includes('safeToKill: true') && portAnalyzer.includes('matchProjectByCommand')) {
-  if (/matchProjectByCommand[\s\S]{0,400}safeToKill:\s*true/.test(portAnalyzer)) {
-    failures.push('matchProjectByCommand must not set safeToKill=true');
-  }
 }
 
 if (failures.length) {

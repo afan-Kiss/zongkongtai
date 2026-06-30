@@ -19,6 +19,7 @@
     "control:acceptance-desktop-performance": "node scripts/acceptance-desktop-performance.mjs",
     "control:acceptance-port-conflicts": "node scripts/acceptance-port-conflicts.mjs",
     "control:acceptance-local-mode": "node scripts/acceptance-local-mode.mjs",
+    "control:acceptance-final-local-clean": "node scripts/acceptance-final-local-clean.mjs",
     "control:acceptance-external-running": "node scripts/acceptance-external-running.mjs",
     "control:acceptance-overview-no-auto-git": "node scripts/acceptance-overview-no-auto-git.mjs",
     "control:acceptance-external-stop": "node scripts/acceptance-external-stop.mjs",

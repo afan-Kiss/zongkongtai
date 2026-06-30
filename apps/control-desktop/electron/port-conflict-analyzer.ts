@@ -14,7 +14,6 @@ import {
   normalizeRiskLevel,
   type RiskLevel,
 } from '../../../packages/control-shared/src/steward';
-import { cloudClient } from './cloud-client';
 import { loadLocalProjectsFromManifests } from './local-projects';
 import { processManager, type ProcessStatus } from './process-manager';
 import { scanLocalPortsAsync, invalidatePortCache } from './port-manager';
@@ -264,11 +263,11 @@ export async function analyzePortConflictsAsync(
   signal?: AbortSignal,
 ): Promise<PortConflictAnalysis> {
   invalidatePortCache();
-  const [cloudPorts, localPorts, projectsRaw] = await Promise.all([
-    cloudClient.ports().catch(() => []),
+  const [localPorts, projectsRaw] = await Promise.all([
     scanLocalPortsAsync(signal, true),
-    cloudClient.projects().catch(() => loadLocalProjectsFromManifests()),
+    Promise.resolve(loadLocalProjectsFromManifests()),
   ]);
+  const cloudPorts: Parameters<typeof analyzePortConflicts>[0] = [];
 
   const projectInputs = buildProjectInputs(projectsRaw);
   const managedRegistry = collectManagedPidRegistry(projectInputs);

@@ -1,16 +1,10 @@
 import { ipcMain, BrowserWindow, shell, app } from 'electron';
-
 import path from 'path';
-
-import { cloudClient } from './cloud-client';
-
 import {
   loadConfig,
   saveConfig,
-  maskToken,
   getConfigDir,
   getConfigFilePath,
-  hasCredentialsSource,
   isConfigComplete,
 } from './config';
 
@@ -46,7 +40,7 @@ import {
   type DetectableProject,
 } from './external-project-status';
 import { canStopExternalProcess, stopExternalProcess } from './external-process-stop';
-import { WORKSPACES, runWorkspace } from './workspace-manager';
+import { detectExternalProjectStatus } from './external-project-status';
 
 import { getLogDir } from './file-logger';
 
@@ -54,12 +48,10 @@ import { isAutoLaunchEnabled, setAutoLaunch } from './auto-launch';
 
 import { fileLog } from './file-logger';
 
-import { agentManager, resolveMonorepoRoot } from './agent-manager';
 import {
   scanManifestsLocal,
   getScanRoot,
   enrichProjectsWithManifests,
-  runAgentScanCli,
   readProjectManifest,
 } from './manifest-scanner';
 import {
@@ -71,14 +63,7 @@ import {
   countGitIgnoredFiles,
   setGitSummaryCache,
 } from './git-manager';
-import {
-  runHealthCheckLight,
-  runHealthCheckFull,
-  runHealthCheckSimple,
-  runHealthRepair,
-  runWorkdayStart,
-  runWorkdayEnd,
-} from './health-check';
+import { runHealthCheckLight, runHealthCheckSimple, runHealthRepair } from './health-check';
 import { taskManager } from './task-manager';
 import { wrapIpcHandler } from './ipc-perf';
 import {
@@ -93,6 +78,21 @@ import {
 } from './ipc-security';
 
 const webViews = new Map<string, BrowserWindow>();
+
+const REMOVED_FEATURE = { ok: false, message: '该功能已移除，总控现在是纯本地工具。' };
+
+function localProjectsList() {
+  return enrichProjectsWithManifests(loadLocalProjectsFromManifests() as any[]);
+}
+
+function resolveLocalProjectPayload(project: { id?: string; code?: string }) {
+  const local =
+    (project.id ? findLocalProjectById(project.id) : null) ||
+    (project.code ? findLocalProjectById(`local-${project.code}`) : null) ||
+    (project.code ? findLocalProjectById(String(project.code)) : null);
+  if (!local) return null;
+  return pickSafeProjectPayload(local as Record<string, unknown>);
+}
 
 function sendTaskEvent(
   getMainWindow: () => BrowserWindow | null,
@@ -145,11 +145,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   taskManager.on('failed', (task) => sendTaskEvent(getMainWindow, 'task:failed', task));
   taskManager.on('cancelled', (task) => sendTaskEvent(getMainWindow, 'task:cancelled', task));
 
-  agentManager.on('status', (snap) => {
-    getMainWindow()?.webContents.send('agent:status', snap);
-  });
-  agentManager.startPolling(20000);
-
   processManager.on('log', ({ projectId, data }) => {
     getMainWindow()?.webContents.send('terminal:data', { projectId, data });
   });
@@ -184,7 +179,9 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     return { ok: true, message: '本地缓存已重置，请重新扫描项目' };
   });
 
-  ipcMain.handle('config:testLogin', async () => ({ ok: true, message: '本地模式无需登录' }));
+  ipcMain.handle('config:testLogin', async () => REMOVED_FEATURE);
+
+  ipcMain.handle('health:checkUrl', async (_e, url: string) => checkHealthUrl(url));
 
   ipcMain.handle('config:setAutoStart', (_e, enabled: boolean) => {
     setAutoLaunch(!!enabled);
@@ -198,15 +195,25 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('config:openConfigDir', () => shell.openPath(getConfigDir()));
 
-  ipcMain.handle('cloud:connect', async () => {
-    const local = loadLocalProjectsFromManifests();
-    return {
-      ok: true,
-      message: '本地模式',
-      agentsOnline: 0,
-      localProjectCount: local.length,
-    };
+  ipcMain.handle('cloud:connect', async () => ({
+    ok: true,
+    message: '本地模式',
+    agentsOnline: 0,
+    localProjectCount: loadLocalProjectsFromManifests().length,
+  }));
+
+  ipcMain.handle('cloud:projects', async () => localProjectsList());
+  ipcMain.handle('cloud:project', async (_e, id: string) => {
+    const p = findLocalProjectById(id);
+    if (!p) throw new Error('未找到本地项目');
+    return enrichProjectsWithManifests([p as any])[0];
   });
+  ipcMain.handle('cloud:healthCheck', async (_e, url: string) => checkHealthUrl(url));
+  ipcMain.handle('cloud:ports', async () => REMOVED_FEATURE);
+  ipcMain.handle('cloud:secrets', async () => REMOVED_FEATURE);
+  ipcMain.handle('cloud:dashboard', async () => REMOVED_FEATURE);
+  ipcMain.handle('cloud:agents', async () => REMOVED_FEATURE);
+  ipcMain.handle('cloud:openSecretsPage', async () => REMOVED_FEATURE);
 
   ipcMain.handle('projects:loadLocal', () => {
     const local = loadLocalProjectsFromManifests();
@@ -260,47 +267,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     return rows;
   });
 
-  ipcMain.handle('cloud:projects', async () => {
-    return enrichProjectsWithManifests(loadLocalProjectsFromManifests() as any[]);
-  });
-
-  ipcMain.handle('cloud:project', async (_e, id: string) => {
-    const p = findLocalProjectById(id);
-    if (!p) throw new Error('未找到本地项目');
-    return enrichProjectsWithManifests([p as any])[0];
-  });
-
-  ipcMain.handle('cloud:healthCheck', async (_e, url: string) => checkHealthUrl(url));
-
-  ipcPerf('cloud:ports', async () => {
-    await cloudClient.ensureLogin();
-
-    const [ports, local] = await Promise.all([
-      cloudClient.portConflicts(),
-      scanLocalPortsAsync(undefined, true),
-    ]);
-
-    return { cloud: ports, local };
-  });
-
-  ipcMain.handle('cloud:secrets', async () => {
-    await cloudClient.ensureLogin();
-
-    return cloudClient.secrets();
-  });
-
-  ipcMain.handle('cloud:dashboard', async () => {
-    await cloudClient.ensureLogin();
-
-    return cloudClient.dashboard();
-  });
-
-  ipcMain.handle('cloud:agents', async () => {
-    await cloudClient.ensureLogin();
-
-    return cloudClient.agents();
-  });
-
   ipcMain.handle('process:list', () => processManager.getAll());
 
   ipcMain.handle('process:logs', (_e, projectId: string) => processManager.getLogs(projectId));
@@ -312,17 +278,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcMain.handle('process:preflight', async (_e, project: any) => {
-    if (project?.id && !project.commands) {
-      try {
-        const detail = await cloudClient.project(project.id);
-
-        return processManager.preflight({ ...project, ...detail });
-      } catch {
-        /* use list payload */
-      }
-    }
-
-    return processManager.preflight(project);
+    const local = resolveLocalProjectPayload(project || {});
+    return processManager.preflight(local || project);
   });
 
   ipcMain.handle('process:start', async (_e, project: any) => {
@@ -374,14 +331,30 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('process:restart', async (_e, project: any) => {
     if (!project?.id) throw new Error('缺少项目 ID，无法重启');
-    try {
-      const detail = await cloudClient.project(project.id);
-      const payload = pickSafeProjectPayload(detail as Record<string, unknown>);
-      assertRiskAllowed(payload, 'restart');
-      return processManager.restart(payload);
-    } catch (e) {
-      throw e;
+    const payload = resolveLocalProjectPayload(project);
+    if (!payload) throw new Error('未找到本地项目，请先刷新项目列表。');
+    assertRiskAllowed(payload, 'restart');
+
+    const external = await detectExternalProjectStatus(payload as DetectableProject);
+    if (external.status === 'external-running') {
+      throw new Error('项目在外部运行，请先结束外部进程再启动');
     }
+
+    const managed = processManager.get(project.id);
+    if (managed?.status === 'running' || managed?.status === 'starting') {
+      await processManager.stop(project.id, payload);
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    const started = await processManager.start(payload);
+    if (isQianfanRelayProject(payload)) {
+      await new Promise((r) => setTimeout(r, 4500));
+      const fresh = processManager.get(payload.id);
+      if (fresh?.startupWarning) {
+        return { ...started, startupWarning: fresh.startupWarning };
+      }
+    }
+    return started;
   });
 
   ipcMain.handle('process:usage', async (_e, projectId: string) =>
@@ -462,26 +435,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     }
   });
 
-  ipcMain.handle('workspace:list', () => WORKSPACES);
-
-  ipcMain.handle('workspace:run', async (_e, workspaceId: string) => {
-    await cloudClient.ensureLogin();
-
-    const projects = await cloudClient.projects();
-
-    const win = getMainWindow();
-    const hwnd = getWindowHwnd(win);
-
-    const steps: any[] = [];
-
-    const result = await runWorkspace(workspaceId, projects, hwnd, (step) => {
-      steps.push({ ...step });
-
-      getMainWindow()?.webContents.send('workspace:step', step);
-    });
-
-    return { steps: result, live: steps };
-  });
+  ipcMain.handle('workspace:list', async () => REMOVED_FEATURE);
+  ipcMain.handle('workspace:run', async () => REMOVED_FEATURE);
 
   ipcMain.handle('webview:open', (_e, { id, url }: { id: string; url: string }) => {
     const safeUrl = assertAllowedExternalUrl(url);
@@ -554,11 +509,6 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     userData: app.getPath('userData'),
   }));
 
-  ipcMain.handle('cloud:openSecretsPage', () => {
-    const base = loadConfig().controlServerUrl.replace(/\/$/, '');
-    return shell.openExternal(assertAllowedExternalUrl(`${base}/secrets`));
-  });
-
   ipcMain.handle('ports:inspect4791', () => inspectLegacy4791Async());
 
   ipcMain.handle('ports:close4791', async () => closeLegacy4791());
@@ -583,23 +533,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('project:webUrl', (_e, project: any) => inferWebUrl(project));
 
-  ipcMain.handle('agent:status', () => agentManager.getSnapshot());
-
-  ipcMain.handle('agent:refresh', () => agentManager.refresh());
-
-  ipcMain.handle('agent:start', () => agentManager.startAgent());
-
-  ipcMain.handle('agent:stop', () => agentManager.stopAgent());
-
-  ipcMain.handle('agent:restart', () => agentManager.restartAgent());
-
-  ipcMain.handle('agent:ensure', () => agentManager.ensureRunning(true));
-
-  ipcMain.handle('agent:openLog', () => {
-    const file = agentManager.openAgentLog();
-    shell.showItemInFolder(file);
-    return file;
-  });
+  ipcMain.handle('agent:status', async () => REMOVED_FEATURE);
+  ipcMain.handle('agent:refresh', async () => REMOVED_FEATURE);
+  ipcMain.handle('agent:start', async () => REMOVED_FEATURE);
+  ipcMain.handle('agent:stop', async () => REMOVED_FEATURE);
+  ipcMain.handle('agent:restart', async () => REMOVED_FEATURE);
+  ipcMain.handle('agent:ensure', async () => REMOVED_FEATURE);
+  ipcMain.handle('agent:openLog', async () => REMOVED_FEATURE);
 
   ipcPerf('manifest:scanLocal', () => {
     const root = getScanRoot();
@@ -608,53 +548,33 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
 
   ipcPerf('manifest:import', async () => {
-    await cloudClient.ensureLogin();
     const { manifests, warnings } = scanManifestsLocal(getScanRoot());
     if (!manifests.length) {
       return { ok: false, message: '未找到任何 zhubo-control.manifest.json', warnings };
     }
-    const result = await cloudClient.importManifests(manifests);
-    fileLog.app(`manifest 导入: +${result.imported} 更新 ${result.updated}`);
+    fileLog.app(`本地 manifest 扫描: ${manifests.length} 个`);
     return {
       ok: true,
-      ...result,
-      warnings: [...warnings, ...(result.warnings || [])],
-      message: `导入 ${result.imported} 个，更新 ${result.updated} 个`,
+      imported: 0,
+      updated: manifests.length,
+      warnings,
+      message: `本地扫描完成，发现 ${manifests.length} 个项目`,
     };
   });
 
-  ipcMain.handle('projects:refresh', async () => {
-    try {
-      await cloudClient.ensureLogin();
-      const projects = await cloudClient.projects();
-      return enrichProjectsWithManifests(projects);
-    } catch {
-      return enrichProjectsWithManifests(loadLocalProjectsFromManifests() as any[]);
-    }
-  });
+  ipcMain.handle('projects:refresh', async () => localProjectsList());
 
   ipcPerf('projects:rescanDisk', async () => {
-    await cloudClient.ensureLogin();
-    try {
-      await cloudClient.requestRescan();
-    } catch {
-      /* agent may be offline — fall through to CLI */
-    }
-    const root = resolveMonorepoRoot();
-    if (root) {
-      const cli = await runAgentScanCli(root);
-      if (cli.ok) {
-        await new Promise((r) => setTimeout(r, 1500));
-        const projects = await cloudClient.projects();
-        return { ok: true, message: cli.message, projects: enrichProjectsWithManifests(projects) };
-      }
-    }
-    await new Promise((r) => setTimeout(r, 3000));
-    const projects = await cloudClient.projects();
+    const root = getScanRoot();
+    const { manifests, warnings } = scanManifestsLocal(root);
+    const projects = localProjectsList();
     return {
-      ok: true,
-      message: '已通知 Agent 扫描，请稍后刷新',
-      projects: enrichProjectsWithManifests(projects),
+      ok: manifests.length > 0,
+      message: manifests.length
+        ? `已扫描 ${manifests.length} 个本地项目`
+        : '未找到 manifest，请检查扫描根目录',
+      warnings,
+      projects,
     };
   });
 
@@ -668,13 +588,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcPerf('git:list', async (_e, opts?: { fetchRemote?: boolean }) => {
     assertNotDuplicateTask('git:list');
-    let projects: any[] = [];
-    try {
-      await cloudClient.ensureLogin();
-      projects = await cloudClient.projects();
-    } catch {
-      projects = loadLocalProjectsFromManifests();
-    }
+    const projects = loadLocalProjectsFromManifests();
     return taskManager.startTask('git:list', '扫描 Git 状态', async ({ signal, progress }) => {
       const results = await listGitStatusesAsync(projects, {
         fetchRemote: !!opts?.fetchRemote,
@@ -752,49 +666,15 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
 
   ipcMain.handle('steward:repair', (_e, action: string) => runHealthRepair(action));
 
-  ipcPerf('steward:workdayStart', () => {
-    assertNotDuplicateTask('steward:workdayStart');
-    return taskManager.startTask('steward:workdayStart', '今日开工', async ({ signal, progress }) =>
-      runWorkdayStart(
-        (step, pct, msg) => progress({ progress: pct, message: msg || step }),
-        signal,
-      ),
-    );
-  });
-
-  ipcPerf('steward:workdayEnd', () => {
-    assertNotDuplicateTask('steward:workdayEnd');
-    return taskManager.startTask('steward:workdayEnd', '今日收工', async ({ signal, progress }) =>
-      runWorkdayEnd((step, pct, msg) => progress({ progress: pct, message: msg || step }), signal),
-    );
-  });
+  ipcMain.handle('steward:workdayStart', async () => REMOVED_FEATURE);
+  ipcMain.handle('steward:workdayEnd', async () => REMOVED_FEATURE);
+  ipcMain.handle('steward:backups', async () => REMOVED_FEATURE);
+  ipcMain.handle('steward:createBackup', async () => REMOVED_FEATURE);
+  ipcMain.handle('steward:restoreBackup', async () => REMOVED_FEATURE);
+  ipcMain.handle('steward:deployments', async () => REMOVED_FEATURE);
+  ipcMain.handle('steward:tasks', async () => REMOVED_FEATURE);
 
   ipcMain.handle('tasks:list', () => taskManager.list());
   ipcMain.handle('tasks:get', (_e, id: string) => taskManager.get(id));
   ipcMain.handle('tasks:cancel', (_e, id: string) => taskManager.cancel(id));
-
-  ipcMain.handle('steward:backups', async () => {
-    await cloudClient.ensureLogin();
-    return cloudClient.stewardBackups();
-  });
-
-  ipcPerf('steward:createBackup', async (_e, label?: string) => {
-    await cloudClient.ensureLogin();
-    return cloudClient.stewardCreateBackup(label);
-  });
-
-  ipcPerf('steward:restoreBackup', async (_e, id: string) => {
-    await cloudClient.ensureLogin();
-    return cloudClient.stewardRestoreBackup(id);
-  });
-
-  ipcMain.handle('steward:deployments', async () => {
-    await cloudClient.ensureLogin();
-    return cloudClient.stewardDeployments();
-  });
-
-  ipcMain.handle('steward:tasks', async () => {
-    await cloudClient.ensureLogin();
-    return cloudClient.stewardTasks();
-  });
 }

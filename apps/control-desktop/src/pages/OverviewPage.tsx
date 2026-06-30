@@ -5,7 +5,11 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { ProjectCard } from '@/components/ProjectCard';
 import { useAppStore } from '@/stores/appStore';
 import { useTaskRunner } from '@/hooks/useTaskRunner';
-import { refreshExternalRunning } from '@/hooks/useLocalBootstrap';
+import {
+  refreshExternalRunning,
+  refreshLocalProjects,
+  refreshPortAnalysis,
+} from '@/lib/localRefresh';
 import { dailyFeaturedProjects } from '@/lib/projectDedup';
 import type { HealthCheckReport } from '@zhubo/control-shared';
 
@@ -34,10 +38,7 @@ export function OverviewPage() {
     try {
       const local = await window.zhuboDesktop.projects.loadLocal();
       if (local?.length) useAppStore.getState().setProjects(local as any);
-      const portAnalysis = await window.zhuboDesktop.ports.analyze(
-        useAppStore.getState().portConflictIgnoredIds,
-      );
-      useAppStore.getState().setPortConflictAnalysis(portAnalysis);
+      await refreshPortAnalysis();
       await refreshGitSummary(false);
       await refreshExternalRunning();
       pushToast('success', '状态已刷新');

@@ -91,7 +91,6 @@ export function HealthPage() {
     else if (item.repairAction === 'nav:settings') setPage('settings');
     else if (item.repairAction === 'nav:ports') setPortConflictOpen(true);
     else if (item.repairAction === 'nav:projects') setPage('projects');
-    else if (item.repairAction === 'agent:ensure') void window.zhuboDesktop.agent.ensure();
   };
 
   const summary = report?.summary ?? { ok: 0, warn: 0, error: 0, fixable: 0, skipped: 0 };

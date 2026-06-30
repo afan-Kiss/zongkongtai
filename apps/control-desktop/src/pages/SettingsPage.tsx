@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { useAppStore } from '@/stores/appStore';
+import { refreshLocalProjects } from '@/lib/localRefresh';
 
 export function SettingsPage() {
   const [cfg, setCfg] = useState<any>({});
@@ -16,6 +17,7 @@ export function SettingsPage() {
     await window.zhuboDesktop.config.save(cfg);
     const fresh = await window.zhuboDesktop.config.get();
     setCfg(fresh);
+    await refreshLocalProjects();
     pushToast('success', '设置已保存到本机。');
   };
 
@@ -29,8 +31,7 @@ export function SettingsPage() {
   const resetCache = async () => {
     const r = await window.zhuboDesktop.config.resetLocalCache();
     pushToast(r.ok ? 'success' : 'info', r.message);
-    const local = await window.zhuboDesktop.projects.loadLocal();
-    if (local?.length) useAppStore.getState().setProjects(local as any);
+    await refreshLocalProjects();
   };
 
   const [showAdvanced, setShowAdvanced] = useState(false);

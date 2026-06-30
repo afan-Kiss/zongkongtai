@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, Badge, StatusDot } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAppStore } from '@/stores/appStore';
-import { refreshExternalRunning } from '@/hooks/useLocalBootstrap';
+import { refreshExternalRunning, refreshAfterProcessChange } from '@/lib/localRefresh';
 import type { Project } from '@/types/desktop';
 import { DEFAULT_RISK_BY_CODE, normalizeRiskLevel } from '@zhubo/control-shared';
 import {
@@ -106,6 +106,7 @@ export function ProjectCard({ project }: { project: Project }) {
           'success',
           target ? `项目已启动，可访问地址：${target}` : `${project.name} 已开始启动`,
         );
+        void refreshAfterProcessChange();
       }
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
@@ -127,7 +128,7 @@ export function ProjectCard({ project }: { project: Project }) {
         pid: proc?.pid,
         source: proc?.externalSource,
       });
-      await refreshExternalRunning();
+      await refreshAfterProcessChange();
       pushToast('success', '已结束外部进程');
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : String(e));
@@ -141,6 +142,7 @@ export function ProjectCard({ project }: { project: Project }) {
     }
     if (risk === 'high' && !confirm(`确定停止「${project.name}」？\n该项目为关键服务。`)) return;
     await window.zhuboDesktop.process.stop(project.id, project);
+    await refreshAfterProcessChange();
     pushToast('info', `${project.name} 已停止`);
   };
 
@@ -392,7 +394,7 @@ export function RightPanel() {
     }
     setChecking(true);
     try {
-      const res = await window.zhuboDesktop.cloud.healthCheck(healthTarget);
+      const res = await window.zhuboDesktop.project.healthCheck(healthTarget);
       setHealth(res);
     } catch (e) {
       setHealth({ ok: false, message: e instanceof Error ? e.message : String(e) });
@@ -420,13 +422,17 @@ export function RightPanel() {
         />
 
         <div>
-          <div className="text-foreground">桌面启动命令</div>
+          <div className="text-foreground">当前启动命令</div>
           <div className="mt-1 break-all">
             {project.desktopStartCommand ||
               project.devCommand ||
               project.startCommand ||
-              '使用本地 desktop 默认'}
+              '未配置启动命令'}
           </div>
+        </div>
+        <div>
+          <div className="text-foreground">工作目录</div>
+          <div className="mt-1 break-all">{project.localPath || '—'}</div>
         </div>
         <div>
           <div className="flex items-center justify-between text-foreground">

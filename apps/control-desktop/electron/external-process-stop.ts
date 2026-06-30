@@ -19,7 +19,7 @@ const PROTECTED_PROJECT_CODES = new Set([
 ]);
 
 const PROTECTED_PROCESS_RE =
-  /^(nginx(\.exe)?|x-ui(\.exe)?|xui|powershell(\.exe)?|pwsh(\.exe)?|chrome(\.exe)?|msedge(\.exe)?|firefox(\.exe)?|svchost(\.exe)?|system|csrss(\.exe)?|lsass(\.exe)?|珠宝本地总控工作台\.exe)$/i;
+  /^(nginx(\.exe)?|x-ui(\.exe)?|xui|explorer(\.exe)?|powershell(\.exe)?|pwsh(\.exe)?|chrome(\.exe)?|msedge(\.exe)?|firefox(\.exe)?|svchost(\.exe)?|system|csrss(\.exe)?|lsass(\.exe)?|珠宝本地总控工作台\.exe)$/i;
 
 const PROTECTED_CMD_RE = [
   /nginx/i,

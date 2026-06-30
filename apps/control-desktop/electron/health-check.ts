@@ -4,25 +4,18 @@ import type {
   HealthCheckItem,
   HealthCheckReport,
 } from '../../../packages/control-shared/src/steward';
-import { cloudClient } from './cloud-client';
-import { agentManager } from './agent-manager';
 import { inspectLegacy4791Async, closeLegacy4791 } from './port-4791';
 import { getScanRoot, scanManifestsLocal, readProjectManifest } from './manifest-scanner';
 import { loadConfig } from './config';
-import { listGitStatusesAsync, collectGitProjects } from './git-manager';
-import { scanManifestFileForbidden } from './forbidden-url';
+import { getGitSummaryCache } from './git-manager';
 import { analyzePortConflictsAsync } from './port-conflict-analyzer';
 import { loadLocalProjectsFromManifests } from './local-projects';
 import { detectAllExternalRunning, type DetectableProject } from './external-project-status';
-import { getGitSummaryCache } from './git-manager';
 import { validateProjectStartCommand } from './start-command';
+import { checkHealthUrl } from './port-manager';
+import { scanManifestFileForbidden } from './forbidden-url';
 
 export type HealthProgress = (step: string, progress: number, message?: string) => void;
-
-const DEFAULT_HEALTH_BY_CODE: Record<string, string> = {
-  'zhubo-analysis': 'http://8.137.126.18/api/health',
-  'jade-accounting': 'http://8.137.126.18/account/api/health',
-};
 
 function item(
   partial: Omit<HealthCheckItem, 'repairable'> & { repairable?: boolean },
@@ -38,8 +31,6 @@ function resolveProjectHealthUrl(project: {
 }): string | null {
   if (project.localHealthUrl) return project.localHealthUrl;
   if (project.healthUrl) return project.healthUrl;
-  if (project.code && DEFAULT_HEALTH_BY_CODE[project.code])
-    return DEFAULT_HEALTH_BY_CODE[project.code];
   if (project.publicUrl) {
     const base = project.publicUrl.replace(/\/$/, '');
     if (base.includes('/control')) return null;
@@ -50,52 +41,17 @@ function resolveProjectHealthUrl(project: {
 
 export async function checkCloudHealth(signal?: AbortSignal): Promise<HealthCheckItem> {
   void signal;
-  try {
-    await cloudClient.ensureLogin();
-    return item({
-      id: 'cloud_health',
-      title: '云端总控 health',
-      status: 'ok',
-      message: '云端总控正常',
-      impact: '影响项目同步、Cookie、端口登记',
-      category: 'cloud',
-    });
-  } catch (e) {
-    const raw = e instanceof Error ? e.message : String(e);
-    return item({
-      id: 'cloud_health',
-      title: '云端总控 health',
-      status: 'warn',
-      message: '云端未连接，不影响本地功能。',
-      category: 'cloud',
-    });
-  }
+  return item({
+    id: 'cloud_health',
+    title: '云端总控',
+    status: 'skipped',
+    message: '已移除云端功能，总控为纯本地工具。',
+    category: 'cloud',
+  });
 }
 
 export function checkAgent(): HealthCheckItem[] {
-  const agentSnap = agentManager.getSnapshot();
-  return [
-    item({
-      id: 'agent_online',
-      title: '本地 Agent 在线状态',
-      status:
-        agentSnap.state === 'online' ? 'ok' : agentSnap.state === 'starting' ? 'warn' : 'fixable',
-      message: agentSnap.message,
-      impact: '影响扫描上传、远程启停',
-      repairAction: 'agent:ensure',
-      repairable: agentSnap.state !== 'online',
-      category: 'agent',
-    }),
-    item({
-      id: 'agent_ws',
-      title: 'Agent WebSocket',
-      status: agentSnap.cloudOnline && agentSnap.state === 'online' ? 'ok' : 'warn',
-      message: agentSnap.cloudOnline ? 'WebSocket 通道可用' : 'Agent 未与云端建立 WS',
-      repairAction: 'agent:ensure',
-      repairable: agentSnap.state !== 'online',
-      category: 'agent',
-    }),
-  ];
+  return [];
 }
 
 export function checkManifests(): HealthCheckItem {
@@ -207,7 +163,7 @@ export async function checkProjectHealth(
       continue;
     }
     try {
-      const r = await cloudClient.healthCheck(url);
+      const r = await checkHealthUrl(url);
       items.push(
         item({
           id: `health_${p.code}`,
@@ -233,7 +189,7 @@ export async function checkProjectHealth(
 }
 
 export async function checkGitQuick(
-  projects: Parameters<typeof listGitStatusesAsync>[0],
+  _projects: unknown[],
   signal?: AbortSignal,
 ): Promise<HealthCheckItem> {
   void projects;
@@ -347,7 +303,6 @@ export async function runHealthCheckSimple(signal?: AbortSignal): Promise<Health
       category: 'config',
     }),
     await checkExternalRunningRecognition(),
-    ...(await checkLocalProjectHealth(localProjects)),
   ];
   return summarize(items);
 }
@@ -396,112 +351,36 @@ export function checkLocalManifests(): HealthCheckItem {
 }
 
 export async function checkCloudOptional(): Promise<HealthCheckItem> {
-  try {
-    await cloudClient.ensureLogin();
-    return item({
-      id: 'cloud',
-      title: '云端连接',
-      status: 'ok',
-      message: '已连接',
-      category: 'cloud',
-    });
-  } catch {
-    return item({
-      id: 'cloud',
-      title: '云端连接',
-      status: 'warn',
-      message: '云端未连接，不影响本地功能。',
-      repairAction: 'nav:settings',
-      repairable: true,
-      category: 'cloud',
-    });
-  }
+  return item({
+    id: 'cloud',
+    title: '云端连接',
+    status: 'skipped',
+    message: '已移除云端功能',
+    category: 'cloud',
+  });
 }
 
 export function checkAgentSimple(): HealthCheckItem {
-  const agentSnap = agentManager.getSnapshot();
-  let message = agentSnap.message;
-  if (/401|403|password|密码|token|credential|unauthorized/i.test(message)) {
-    message = '需要重新连接云端（不影响本地基础功能）';
-  } else if (agentSnap.state === 'online') {
-    message = '本地 Agent 在线';
-  } else if (agentSnap.state === 'offline' && !agentSnap.localPid) {
-    message = '本地 Agent 未启动';
-  }
   return item({
     id: 'agent_online',
     title: '本地 Agent',
-    status: agentSnap.state === 'online' ? 'ok' : 'warn',
-    message,
-    repairAction: 'agent:ensure',
-    repairable: agentSnap.state !== 'online',
+    status: 'skipped',
+    message: '已移除 Agent 云端功能',
     category: 'agent',
   });
 }
 
-/** 轻量体检 — 页面打开时用 */
+/** 轻量体检 — 与简单体检一致 */
 export async function runHealthCheckLight(): Promise<HealthCheckReport> {
-  const items: HealthCheckItem[] = [
-    await checkCloudHealth(),
-    ...checkAgent(),
-    checkManifests(),
-    ...checkExeConfig().slice(1, 2),
-  ];
-  return summarize(items);
+  return runHealthCheckSimple();
 }
 
-/** 完整体检 — 后台任务 */
+/** 完整体检 — 本地简化版 */
 export async function runHealthCheckFull(
-  onProgress?: HealthProgress,
+  _onProgress?: HealthProgress,
   signal?: AbortSignal,
 ): Promise<HealthCheckReport> {
-  const items: HealthCheckItem[] = [];
-  const steps: Array<{ name: string; run: () => Promise<HealthCheckItem | HealthCheckItem[]> }> = [
-    { name: '云端 health', run: () => checkCloudHealth(signal) },
-    { name: 'Agent', run: async () => checkAgent() },
-    { name: 'manifest', run: async () => checkManifests() },
-    { name: '端口', run: () => checkPorts(signal) },
-    { name: '4791', run: () => checkLegacy4791(signal) },
-    { name: '禁用 URL', run: async () => checkForbiddenRuntimeUrls() },
-    {
-      name: '项目 health',
-      run: async () => {
-        const projects = await cloudClient.projects().catch(() => []);
-        return checkProjectHealth(projects);
-      },
-    },
-    {
-      name: 'Git',
-      run: async () => {
-        const projects = await cloudClient.projects().catch(() => []);
-        return checkGitQuick(projects, signal);
-      },
-    },
-    { name: 'EXE 配置', run: async () => checkExeConfig() },
-  ];
-
-  for (let i = 0; i < steps.length; i++) {
-    if (signal?.aborted) break;
-    const step = steps[i];
-    onProgress?.(step.name, Math.round(((i + 1) / steps.length) * 100), `正在检查：${step.name}`);
-    try {
-      const result = await step.run();
-      if (Array.isArray(result)) items.push(...result);
-      else items.push(result);
-    } catch (e) {
-      items.push(
-        item({
-          id: `step_${i}`,
-          title: step.name,
-          status: 'skipped',
-          message: e instanceof Error ? e.message : '检查失败，已跳过',
-          category: 'config',
-        }),
-      );
-    }
-  }
-
-  return summarize(items);
+  return runHealthCheckSimple(signal);
 }
 
 /** @deprecated 使用 runHealthCheckFull */
@@ -512,76 +391,10 @@ export async function runHealthCheck(): Promise<HealthCheckReport> {
 export async function runHealthRepair(action: string): Promise<{ ok: boolean; message: string }> {
   switch (action) {
     case 'agent:ensure':
-      return agentManager.ensureRunning();
+      return { ok: false, message: '该功能已移除，总控现在是纯本地工具。' };
     case 'ports:close4791':
       return closeLegacy4791();
     default:
       return { ok: false, message: `未知修复动作：${action}` };
   }
-}
-
-export async function runWorkdayStart(
-  onProgress?: HealthProgress,
-  signal?: AbortSignal,
-): Promise<{ ok: boolean; message: string; report: HealthCheckReport }> {
-  onProgress?.('Agent', 10, '检查 Agent…');
-  await agentManager.ensureRunning();
-  onProgress?.('完整体检', 30, '运行开工体检…');
-  const report = await runHealthCheckFull(onProgress, signal);
-  const issues = report.items.filter((i) => i.status === 'error' || i.status === 'warn');
-  return {
-    ok: report.summary.error === 0,
-    message: issues.length ? `开工检查完成，${issues.length} 项需关注` : '今日开工检查全部正常',
-    report,
-  };
-}
-
-export async function runWorkdayEnd(
-  onProgress?: HealthProgress,
-  signal?: AbortSignal,
-): Promise<{
-  ok: boolean;
-  message: string;
-  unpushed: Awaited<ReturnType<typeof listGitStatusesAsync>>;
-}> {
-  const projects = await cloudClient.projects().catch(() => []);
-  const items = collectGitProjects(projects);
-  const unpushed: Awaited<ReturnType<typeof listGitStatusesAsync>> = [];
-
-  for (let i = 0; i < items.length; i++) {
-    if (signal?.aborted) break;
-    const p = items[i];
-    onProgress?.(
-      'Git',
-      Math.round(((i + 1) / items.length) * 100),
-      `正在检查 Git ${i + 1}/${items.length}：${p.projectName}`,
-    );
-    const st = await listGitStatusesAsync(
-      [
-        {
-          code: p.projectCode,
-          name: p.projectName,
-          localPath: p.localPath,
-          gitRemote: p.gitRemote,
-        },
-      ],
-      {
-        fetchRemote: false,
-        concurrency: 1,
-        signal,
-      },
-    );
-    const row = st[0];
-    if (row && (row.hasUnpushed || row.state === 'unpushed' || row.state === 'dirty')) {
-      unpushed.push(row);
-    }
-  }
-
-  return {
-    ok: unpushed.length === 0,
-    message: unpushed.length
-      ? `收工提醒：还有 ${unpushed.length} 个项目未 push`
-      : '收工检查：Git 已全部同步',
-    unpushed,
-  };
 }

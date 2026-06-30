@@ -10,25 +10,10 @@ const api = {
   config: {
     get: () => ipcRenderer.invoke('config:get'),
     save: (data: unknown) => ipcRenderer.invoke('config:save', data),
-    testLogin: (data?: unknown) => ipcRenderer.invoke('config:testLogin', data),
     setAutoStart: (enabled: boolean) => ipcRenderer.invoke('config:setAutoStart', enabled),
     openLogsDir: () => ipcRenderer.invoke('config:openLogsDir'),
     openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),
     resetLocalCache: () => ipcRenderer.invoke('config:resetLocalCache'),
-  },
-
-  cloud: {
-    connect: () => ipcRenderer.invoke('cloud:connect'),
-    projects: () => ipcRenderer.invoke('cloud:projects'),
-    project: (id: string) => ipcRenderer.invoke('cloud:project', id),
-    healthCheck: (url: string) => ipcRenderer.invoke('cloud:healthCheck', url),
-    ports: () => ipcRenderer.invoke('cloud:ports'),
-    secrets: () => ipcRenderer.invoke('cloud:secrets'),
-    dashboard: () => ipcRenderer.invoke('cloud:dashboard'),
-    agents: () => ipcRenderer.invoke('cloud:agents'),
-    qianfanShops: (includeArchived?: boolean) =>
-      ipcRenderer.invoke('cloud:qianfanShops', { includeArchived }),
-    openSecretsPage: () => ipcRenderer.invoke('cloud:openSecretsPage'),
   },
 
   process: {
@@ -74,6 +59,11 @@ const api = {
 
   project: {
     webUrl: (p: unknown) => ipcRenderer.invoke('project:webUrl', p),
+    healthCheck: (url: string) => ipcRenderer.invoke('health:checkUrl', url),
+  },
+
+  health: {
+    checkUrl: (url: string) => ipcRenderer.invoke('health:checkUrl', url),
   },
 
   shell: {
@@ -91,38 +81,12 @@ const api = {
     arrangeQianfan: () => ipcRenderer.invoke('native:arrangeQianfan'),
   },
 
-  workspace: {
-    list: () => ipcRenderer.invoke('workspace:list'),
-    run: (id: string) => ipcRenderer.invoke('workspace:run', id),
-    onStep: (cb: (step: unknown) => void) => {
-      const handler = (_: unknown, step: unknown) => cb(step);
-      ipcRenderer.on('workspace:step', handler);
-      return () => ipcRenderer.removeListener('workspace:step', handler);
-    },
-  },
-
   webview: {
     open: (id: string, url: string) => ipcRenderer.invoke('webview:open', { id, url }),
   },
 
-  agent: {
-    status: () => ipcRenderer.invoke('agent:status'),
-    refresh: () => ipcRenderer.invoke('agent:refresh'),
-    start: () => ipcRenderer.invoke('agent:start'),
-    stop: () => ipcRenderer.invoke('agent:stop'),
-    restart: () => ipcRenderer.invoke('agent:restart'),
-    ensure: () => ipcRenderer.invoke('agent:ensure'),
-    openLog: () => ipcRenderer.invoke('agent:openLog'),
-    onStatus: (cb: (snap: unknown) => void) => {
-      const handler = (_: unknown, snap: unknown) => cb(snap);
-      ipcRenderer.on('agent:status', handler);
-      return () => ipcRenderer.removeListener('agent:status', handler);
-    },
-  },
-
   manifest: {
     scanLocal: () => ipcRenderer.invoke('manifest:scanLocal'),
-    import: () => ipcRenderer.invoke('manifest:import'),
     dedupePortsPreview: (localPath: string) =>
       ipcRenderer.invoke('manifest:dedupePortsPreview', localPath),
     dedupePortsApply: (localPath: string) =>
@@ -154,13 +118,6 @@ const api = {
     healthCheckLight: () => ipcRenderer.invoke('steward:healthCheckLight'),
     healthCheck: () => ipcRenderer.invoke('steward:healthCheck'),
     repair: (action: string) => ipcRenderer.invoke('steward:repair', action),
-    workdayStart: () => ipcRenderer.invoke('steward:workdayStart'),
-    workdayEnd: () => ipcRenderer.invoke('steward:workdayEnd'),
-    backups: () => ipcRenderer.invoke('steward:backups'),
-    createBackup: (label?: string) => ipcRenderer.invoke('steward:createBackup', label),
-    restoreBackup: (id: string) => ipcRenderer.invoke('steward:restoreBackup', id),
-    deployments: () => ipcRenderer.invoke('steward:deployments'),
-    tasks: () => ipcRenderer.invoke('steward:tasks'),
   },
 
   tasks: {
